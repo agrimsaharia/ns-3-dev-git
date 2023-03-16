@@ -5,14 +5,25 @@
 #include "ns3/log.h"
 #include "ns3/string.h"
 #include "ns3/point-to-point-dumbbell.h"
-#include "ns3/bulk-send-helper.h"
-#include "ns3/packet-sink-helper.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/applications-module.h"
+#include "ns3/command-line.h"
 // #include "ns3/animation-interface.h"
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("p2p_simul");
+
+int n_nodes = 1;
+
+static void
+GoodputChange(Ptr<OutputStreamWrapper> file, Ptr<PacketSink> sink1, double prevBytesThrough)
+{
+    double recvBytes = sink1->GetTotalRx();
+    double throughput = ((recvBytes - prevBytesThrough) * 8);
+    *file->GetStream() << Simulator::Now().GetSeconds() << "," << throughput << std::endl;
+    Simulator::Schedule(MilliSeconds(1.0), &GoodputChange, file, sink1, recvBytes);
+}
 
 static void
 CwndChange(Ptr<OutputStreamWrapper> file, uint32_t oldval, uint32_t newval)
@@ -20,24 +31,47 @@ CwndChange(Ptr<OutputStreamWrapper> file, uint32_t oldval, uint32_t newval)
     *file->GetStream() << Simulator::Now().GetSeconds() << "," << newval << '\n';
 }
 
-static void 
+static void
 TraceCwnd()
 {
     AsciiTraceHelper asciiTraceHelper;
-    Ptr<OutputStreamWrapper> file1 = asciiTraceHelper.CreateFileStream("tracecwnd1.csv");
-    Ptr<OutputStreamWrapper> file2 = asciiTraceHelper.CreateFileStream("tracecwnd2.csv");
-    Ptr<OutputStreamWrapper> file3 = asciiTraceHelper.CreateFileStream("tracecwnd3.csv");
-    Ptr<OutputStreamWrapper> file4 = asciiTraceHelper.CreateFileStream("tracecwnd4.csv");
-    Config::ConnectWithoutContext("/NodeList/2/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeBoundCallback(&CwndChange, file1));
-    Config::ConnectWithoutContext("/NodeList/3/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeBoundCallback(&CwndChange, file2));
-    Config::ConnectWithoutContext("/NodeList/4/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeBoundCallback(&CwndChange, file3));
-    Config::ConnectWithoutContext("/NodeList/5/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeBoundCallback(&CwndChange, file4));
+    for (int i = 0; i < n_nodes; i++)
+    {
+        Ptr<OutputStreamWrapper> file =
+            asciiTraceHelper.CreateFileStream("p2p_cwnd" + std::to_string(i) + ".csv");
+        Config::ConnectWithoutContext(
+            "/NodeList/" + std::to_string(i+2) + "/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow",
+            MakeBoundCallback(&CwndChange, file));
+    }
+}
+
+static void
+TraceGoodput(ApplicationContainer* apps)
+{
+    AsciiTraceHelper asciiTraceHelper;
+    for (int i = 0; i < n_nodes; i++)
+    {
+        Ptr<OutputStreamWrapper> file =
+            asciiTraceHelper.CreateFileStream("p2p_goodput" + std::to_string(i) + ".csv");
+        Simulator::Schedule(
+            MilliSeconds(1.0),
+            MakeBoundCallback(&GoodputChange, file, apps->Get(i)->GetObject<PacketSink>(), 0.0));
+    }
 }
 
 int
 main(int argc, char* argv[])
 {
-    bool enable_log = true;
+    std::string tcp_mode = "TcpCubic";
+    int runtime = 50; // Seconds
+    bool enable_log = false;
+
+    CommandLine cmd(__FILE__);
+    cmd.AddValue("numnodes", "number of senders in simulation", n_nodes);
+    cmd.AddValue("logging", "turn on all Application log components", enable_log);
+    cmd.AddValue("tcpmode", "specify the type of tcp socket", tcp_mode);
+    cmd.AddValue("runtime", "Time (in Seconds) sender applications run", runtime);
+    cmd.Parse(argc, argv);
 
     if (enable_log)
     {
@@ -46,17 +80,19 @@ main(int argc, char* argv[])
     }
 
     // Fix non-unicast data rate to be the same as that of unicast
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpCubic"));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
+    // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("1p"));
 
     PointToPointHelper p2phelper;
-    p2phelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2phelper.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
+    p2phelper.SetDeviceAttribute("DataRate", StringValue("11Mbps"));
 
     PointToPointHelper p2pbottleneckhelper;
-    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("100ms"));
-    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
+    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("100ns"));
+    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
 
-    PointToPointDumbbellHelper dumbbellhelper(4, p2phelper, 4, p2phelper, p2pbottleneckhelper);
+    
+    PointToPointDumbbellHelper dumbbellhelper(n_nodes, p2phelper, n_nodes, p2phelper, p2pbottleneckhelper);
 
     InternetStackHelper stack;
     dumbbellhelper.InstallStack(stack);
@@ -68,45 +104,46 @@ main(int argc, char* argv[])
     
     dumbbellhelper.AssignIpv4Addresses(ipv4left, ipv4right, ipv4bottleneck);
 
-    BulkSendHelper blksender0("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(0), 800));
-    BulkSendHelper blksender1("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(1), 800));
-    BulkSendHelper blksender2("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(2), 800));
-    BulkSendHelper blksender3("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(3), 800));
-
     ApplicationContainer senderApps;
-    senderApps.Add(blksender0.Install(dumbbellhelper.GetLeft(0)));
-    senderApps.Add(blksender1.Install(dumbbellhelper.GetLeft(1)));
-    senderApps.Add(blksender2.Install(dumbbellhelper.GetLeft(2)));
-    senderApps.Add(blksender3.Install(dumbbellhelper.GetLeft(3)));
-    
-    PacketSinkHelper pktsink0("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 800));
-    PacketSinkHelper pktsink1("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 800));
-    PacketSinkHelper pktsink2("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 800));
-    PacketSinkHelper pktsink3("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 800));
+    for (int i = 0; i < n_nodes; i++)
+    {
+        BulkSendHelper blksender("ns3::TcpSocketFactory",
+                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        senderApps.Add(blksender.Install(dumbbellhelper.GetLeft(i)));
+    }
 
     ApplicationContainer recvApps;
-    recvApps.Add(pktsink0.Install(dumbbellhelper.GetRight(0)));
-    recvApps.Add(pktsink1.Install(dumbbellhelper.GetRight(1)));
-    recvApps.Add(pktsink2.Install(dumbbellhelper.GetRight(2)));
-    recvApps.Add(pktsink3.Install(dumbbellhelper.GetRight(3)));
+    for (int i = 0; i < n_nodes; i++)
+    {
+        PacketSinkHelper pktsink("ns3::TcpSocketFactory",
+                                 InetSocketAddress(Ipv4Address::GetAny(), 800));
+        recvApps.Add(pktsink.Install(dumbbellhelper.GetRight(i)));
+    }
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-    senderApps.Start(Seconds(1.0));
+    senderApps.Start(Seconds(0.0));
     recvApps.Start(Seconds(0.0));
 
-    senderApps.Stop(Seconds(20.0));
-    recvApps.Stop(Seconds(50.0));
+    senderApps.Stop(Seconds(runtime));
+    recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    p2pbottleneckhelper.EnablePcapAll("p2p_simul");
+    p2pbottleneckhelper.EnablePcap("p2p_simul", dumbbellhelper.GetLeft()->GetDevice(0), false);
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
+    // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
 
     // AnimationInterface anim("../animwifi.xml");
-
-    Simulator::Stop(Seconds(200.0));
+    Simulator::Stop(Seconds(runtime + 1));
     Simulator::Run();
+
+    for (int i = 0; i < n_nodes; i++)
+    {
+        std::cout << "Avg. Goodput (Mbps) for flow " + std::to_string(i) + ": "
+                  << recvApps.Get(i)->GetObject<PacketSink>()->GetTotalRx() * 8.0 / (runtime * 1024 * 1024) << '\n';
+    }
+
     Simulator::Destroy();
 
     return 0;
