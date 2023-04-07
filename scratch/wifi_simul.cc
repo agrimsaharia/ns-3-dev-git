@@ -1,52 +1,3 @@
-// This script configures two nodes on an 802.11b physical layer, with
-// 802.11b NICs in infrastructure mode, and by default, the station sends
-// one packet of 1000 (application) bytes to the access point.  Unlike
-// the default physical layer configuration in which the path loss increases
-// (and the received signal strength decreases) as the distance between the
-// nodes increases, this example uses an artificial path loss model that
-// allows the configuration of the received signal strength (RSS) regardless
-// of other transmitter parameters (such as transmit power) or distance.
-// Therefore, changing position of the nodes has no effect.
-//
-// There are a number of command-line options available to control
-// the default behavior.  The list of available command-line options
-// can be listed with the following command:
-// ./ns3 run "wifi-simple-infra --help"
-// Additional command-line options are available via the generic attribute
-// configuration system.
-//
-// For instance, for the default configuration, the physical layer will
-// stop successfully receiving packets when rss drops to -82 dBm or below.
-// To see this effect, try running:
-//
-// ./ns3 run "wifi-simple-infra --rss=-80
-// ./ns3 run "wifi-simple-infra --rss=-81
-// ./ns3 run "wifi-simple-infra --rss=-82
-//
-// The last command (and any RSS value lower than this) results in no
-// packets received.  This is due to the preamble detection model that
-// dominates the reception performance.  By default, the
-// ThresholdPreambleDetectionModel is added to all WifiPhy objects, and this
-// model prevents reception unless the incoming signal has a RSS above its
-// 'MinimumRssi' value (default of -82 dBm) and has a SNR above the
-// 'Threshold' value (default of 4).
-//
-// If we relax these values, we can instead observe that signal reception
-// due to the 802.11b error model alone is much lower.  For instance,
-// setting the MinimumRssi to -101 (around the thermal noise floor).
-// and the SNR Threshold to -10 dB, shows that the DsssErrorRateModel can
-// successfully decode at RSS values of -97 or -98 dBm.
-//
-// ./ns3 run "wifi-simple-infra --rss=-97 --numPackets=20
-// --ns3::ThresholdPreambleDetectionModel::Threshold=-10
-// --ns3::ThresholdPreambleDetectionModel::MinimumRssi=-101"
-// ./ns3 run "wifi-simple-infra --rss=-98 --numPackets=20
-// --ns3::ThresholdPreambleDetectionModel::Threshold=-10
-// --ns3::ThresholdPreambleDetectionModel::MinimumRssi=-101"
-// ./ns3 run "wifi-simple-infra --rss=-99 --numPackets=20
-// --ns3::ThresholdPreambleDetectionModel::Threshold=-10
-// --ns3::ThresholdPreambleDetectionModel::MinimumRssi=-101"
-
 #include "ns3/animation-interface.h"
 #include "ns3/applications-module.h"
 #include "ns3/command-line.h"
@@ -63,6 +14,17 @@
 #include "ns3/string.h"
 #include "ns3/yans-wifi-channel.h"
 #include "ns3/yans-wifi-helper.h"
+
+
+/*
+                   Network Topology
+
+n0 -------------\                   /---------------n2
+  (wifi)         r1---------------r2 (wifi)
+n1 -------------/   p2p bottleneck  \---------------n3
+*/
+
+
 
 using namespace ns3;
 
@@ -106,7 +68,7 @@ TraceCwnd()
     for (int i = 0; i < n_nodes; i++)
     {
         Ptr<OutputStreamWrapper> file =
-            asciiTraceHelper.CreateFileStream("wifi_cwnd" + std::to_string(i) + ".csv");
+            asciiTraceHelper.CreateFileStream("results/wifi_cwnd" + std::to_string(i) + ".csv");
         Config::ConnectWithoutContext("/NodeList/" + std::to_string(i) +
                                           "/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow",
                                       MakeBoundCallback(&CwndChange, file));
@@ -120,7 +82,7 @@ TraceGoodput(ApplicationContainer* apps)
     for (int i = 0; i < n_nodes; i++)
     {
         Ptr<OutputStreamWrapper> file =
-            asciiTraceHelper.CreateFileStream("wifi_goodput" + std::to_string(i) + ".csv");
+            asciiTraceHelper.CreateFileStream("results/wifi_goodput" + std::to_string(i) + ".csv");
         Simulator::Schedule(
             MilliSeconds(1.0),
             MakeBoundCallback(&GoodputChange, file, apps->Get(i)->GetObject<PacketSink>(), 0.0));
@@ -143,7 +105,7 @@ TraceDropRatio()
 int
 main(int argc, char* argv[])
 {
-    std::string phyMode("OfdmRate12MbpsBW10MHz");
+    std::string phyMode("DsssRate11Mbps");
     std::string tcp_mode = "TcpCubic";
     int runtime = 50; // Seconds
     double rss = -80; // -dBm
@@ -175,7 +137,7 @@ main(int argc, char* argv[])
     p2phelper.SetDeviceAttribute("DataRate", StringValue("11Mbps"));
 
     PointToPointHelper p2pbottleneckhelper;
-    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("100ns"));
+    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
     p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
 
     NodeContainer leftwifinodes(n_nodes);
@@ -187,7 +149,7 @@ main(int argc, char* argv[])
 
     // The below set of helpers will help us to put together the wifi NICs we want
     WifiHelper wifi;
-    wifi.SetStandard(WIFI_STANDARD_80211ax);
+    wifi.SetStandard(WIFI_STANDARD_80211n);
     // wifi.EnableLogComponents(); // Turn on all Wifi logging
 
     YansWifiPhyHelper wifiPhy;
@@ -292,7 +254,7 @@ main(int argc, char* argv[])
     recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    wifiPhy.EnablePcap("wifi_simul", apDevice);
+    wifiPhy.EnablePcap("results/wifi_simul", apDevice);
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));

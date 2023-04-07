@@ -10,6 +10,15 @@
 #include "ns3/command-line.h"
 // #include "ns3/animation-interface.h"
 
+/*
+                   Network Topology
+                   
+n0 -------------\                   /---------------n2
+  (p2p)          r1---------------r2 (p2p)
+n1 -------------/   p2p bottleneck  \---------------n3
+*/
+
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("p2p_simul");
@@ -38,7 +47,7 @@ TraceCwnd()
     for (int i = 0; i < n_nodes; i++)
     {
         Ptr<OutputStreamWrapper> file =
-            asciiTraceHelper.CreateFileStream("p2p_cwnd" + std::to_string(i) + ".csv");
+            asciiTraceHelper.CreateFileStream("results/p2p_cwnd" + std::to_string(i) + ".csv");
         Config::ConnectWithoutContext(
             "/NodeList/" + std::to_string(i+2) + "/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow",
             MakeBoundCallback(&CwndChange, file));
@@ -52,7 +61,7 @@ TraceGoodput(ApplicationContainer* apps)
     for (int i = 0; i < n_nodes; i++)
     {
         Ptr<OutputStreamWrapper> file =
-            asciiTraceHelper.CreateFileStream("p2p_goodput" + std::to_string(i) + ".csv");
+            asciiTraceHelper.CreateFileStream("results/p2p_goodput" + std::to_string(i) + ".csv");
         Simulator::Schedule(
             MilliSeconds(1.0),
             MakeBoundCallback(&GoodputChange, file, apps->Get(i)->GetObject<PacketSink>(), 0.0));
@@ -88,7 +97,7 @@ main(int argc, char* argv[])
     p2phelper.SetDeviceAttribute("DataRate", StringValue("11Mbps"));
 
     PointToPointHelper p2pbottleneckhelper;
-    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("100ns"));
+    p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
     p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
 
     
@@ -129,7 +138,7 @@ main(int argc, char* argv[])
     recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    p2pbottleneckhelper.EnablePcap("p2p_simul", dumbbellhelper.GetLeft()->GetDevice(0), false);
+    p2pbottleneckhelper.EnablePcap("results/p2p_simul", dumbbellhelper.GetLeft()->GetDevice(0), false);
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
