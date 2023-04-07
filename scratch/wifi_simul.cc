@@ -31,18 +31,18 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("Wifi_simul");
 
 int n_nodes = 1;
-int total_Packets = 0, dropped_Packets = 0;
+int pktsRecvAP = 0, pktsDropAP = 0;
 
 static void
 PhyRxBeginTrace(Ptr<const Packet> packet, RxPowerWattPerChannelBand rxPowersW)
 {
-    total_Packets++;
+    pktsRecvAP++;
 }
 
 static void
 PhyRxDropTrace(Ptr<const Packet> packet, ns3::WifiPhyRxfailureReason reason)
 {
-    dropped_Packets++;
+    pktsDropAP++;
     // std::cout << reason << std::endl;
 }
 
@@ -260,11 +260,11 @@ main(int argc, char* argv[])
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
     Simulator::Schedule(Seconds(1.001), &TraceDropRatio);
 
-    // AnimationInterface anim("../animwifi.xml");
+    AnimationInterface anim("../animwifi.xml");
     Simulator::Stop(Seconds(runtime + 1));
     Simulator::Run();
 
-    std::cout << "Ratio of dropped packets on AP: " << dropped_Packets * 1.0 / total_Packets
+    std::cout << "Ratio of dropped packets on AP: " << pktsDropAP * 1.0 / pktsRecvAP
               << '\n';
 
     for (int i = 0; i < n_nodes; i++)
