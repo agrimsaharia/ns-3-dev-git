@@ -14,6 +14,7 @@
 #include "ns3/string.h"
 #include "ns3/yans-wifi-channel.h"
 #include "ns3/yans-wifi-helper.h"
+#include "ns3/random-walk-2d-mobility-model.h"
 
 
 /*
@@ -32,6 +33,18 @@ NS_LOG_COMPONENT_DEFINE("Wifi_simul");
 
 int n_nodes = 1;
 int pktsRecvAP = 0, pktsDropAP = 0;
+
+static double
+GetAverageDelayOfWiFiNodes(NodeContainer &staNodes, Ptr<Node> apNode)
+{
+    double avgDelay = 0;
+    for(uint32_t i = 0; i < staNodes.GetN(); i++)
+    {
+        avgDelay += std::sqrt(MobilityHelper::GetDistanceSquaredBetween(staNodes.Get(i), apNode)) * 1000000000.0 / 299792458;
+    }
+    avgDelay /= staNodes.GetN();
+    return avgDelay;
+}
 
 static void
 PhyRxBeginTrace(Ptr<const Packet> packet, RxPowerWattPerChannelBand rxPowersW)
@@ -187,33 +200,41 @@ main(int argc, char* argv[])
 
     // Note that with FixedRssLossModel, the positions below are not
     // used for received signal strength.
+
     MobilityHelper mobility;
-    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
-                                  "MinX",
-                                  DoubleValue(0.0),
-                                  "MinY",
-                                  DoubleValue(0.0),
-                                  "DeltaX",
-                                  DoubleValue(2.0),
-                                  "DeltaY",
-                                  DoubleValue(2.0),
-                                  "GridWidth",
-                                  UintegerValue(3),
-                                  "LayoutType",
-                                  StringValue("RowFirst"));
-    // mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-    //                           "Bounds",
-    //                           RectangleValue(Rectangle(-50, 50, -50, 50)));
-    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobility.Install(leftwifinodes);
 
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobility.Install(dumbbellhelper.GetLeft());
+    dumbbellhelper.GetLeft()->GetObject<MobilityModel>()->SetPosition(Vector(50, 50, 0));
+    
+    mobility.SetPositionAllocator("ns3::UniformDiscPositionAllocator",
+        "rho", DoubleValue(20),
+        "X", DoubleValue(50),
+        "Y", DoubleValue(50)
+    );
+    mobility.SetMobilityModel (
+        "ns3::RandomWalk2dMobilityModel", 
+        "Bounds", RectangleValue (Rectangle (0, 100, 0, 100))
+        );
+    mobility.Install(leftwifinodes);
 
-    Ptr<MobilityModel> mobModel = dumbbellhelper.GetLeft()->GetObject<MobilityModel>();
-    mobModel->SetPosition(Vector(10, 10, 0));
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(dumbbellhelper.GetRight());
+    dumbbellhelper.GetRight()->GetObject<MobilityModel>()->SetPosition(Vector(150, 150, 0));
+    mobility.SetPositionAllocator("ns3::UniformDiscPositionAllocator",
+        "rho", DoubleValue(20),
+        "X", DoubleValue(150),
+        "Y", DoubleValue(150)
+    );
+    for (int i = 0; i < n_nodes; i++)
+    {
+        mobility.Install(dumbbellhelper.GetRight(i));
+    }
 
-    std::cout << "Delay of wifi nodes = " << std::sqrt(200) * 1000000000.0 / 299792458 << "ns"
+    // Ptr<MobilityModel> mobModel = dumbbellhelper.GetLeft()->GetObject<MobilityModel>();
+    // mobModel->SetPosition(Vector(10, 10, 0));
+
+    std::cout << "Average delay of wifi nodes = " << GetAverageDelayOfWiFiNodes(leftwifinodes, dumbbellhelper.GetLeft()) << "ns"
               << '\n';
 
     InternetStackHelper stack;
