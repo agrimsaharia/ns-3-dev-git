@@ -115,20 +115,20 @@ TraceDropRatio()
         MakeBoundCallback(&PhyRxDropTrace));
 }
 
-static void
-DataRateTrace (uint64_t currRate, uint64_t prevrate)
-{
-    std::cout << Simulator::Now().GetSeconds () << "\t Data Rate Now: " << currRate*1.0/(1024*1024) << "Mbps" << std::endl;
-}
+// static void
+// DataRateTrace (uint64_t currRate, uint64_t prevrate)
+// {
+//     std::cout << Simulator::Now().GetSeconds () << "\t Data Rate Now: " << currRate*1.0/(1024*1024) << "Mbps" << std::endl;
+// }
 
-void
-TraceDataRate()
-{
-    Config::ConnectWithoutContext(
-        "/NodeList/" + std::to_string(0) +
-            "/DeviceList/0/$ns3::WifiNetDevice/RemoteStationManager/$ns3::MinstrelHtWifiManager/Rate",
-        MakeBoundCallback(&DataRateTrace));
-}
+// void
+// TraceDataRate()
+// {
+//     Config::ConnectWithoutContext(
+//         "/NodeList/" + std::to_string(0) +
+//             "/DeviceList/0/$ns3::WifiNetDevice/RemoteStationManager/$ns3::MinstrelHtWifiManager/Rate",
+//         MakeBoundCallback(&DataRateTrace));
+// }
 
 int
 main(int argc, char* argv[])
@@ -157,7 +157,8 @@ main(int argc, char* argv[])
     // Fix non-unicast data rate to be the same as that of unicast
     // Config::SetDefault("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue(phyMode));
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
-    // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("1p"));
+    // Config::SetDefault("ns3::TcpSocketBase::Sack", BooleanValue(false));
+    // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("10p"));
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
@@ -286,7 +287,10 @@ main(int argc, char* argv[])
     recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    wifiPhy.EnablePcap("results/wifi_simul", apDevice);
+    wifiPhy.EnablePcap("results/wifi_ap", apDevice);
+    wifiPhy.EnablePcap("results/wifi_node", staDevices);
+    p2pbottleneckhelper.EnablePcap("results/wifi_router1", dumbbellhelper.GetLeft()->GetDevice(0));
+    p2pbottleneckhelper.EnablePcap("results/wifi_router2", dumbbellhelper.GetRight()->GetDevice(0));
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), &TraceDataRate);

@@ -1,14 +1,16 @@
+#include "ns3/animation-interface.h"
 #include "ns3/config.h"
 #include "ns3/double.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/log.h"
-#include "ns3/string.h"
+#include "ns3/mobility-helper.h"
+#include "ns3/mobility-model.h"
 #include "ns3/point-to-point-dumbbell.h"
+#include "ns3/string.h"
 #include "ns3/ipv4-global-routing-helper.h"
 #include "ns3/applications-module.h"
 #include "ns3/command-line.h"
-// #include "ns3/animation-interface.h"
 
 /*
                    Network Topology
@@ -102,7 +104,34 @@ main(int argc, char* argv[])
 
     
     PointToPointDumbbellHelper dumbbellhelper(n_nodes, p2phelper, n_nodes, p2phelper, p2pbottleneckhelper);
+    MobilityHelper mobility;
 
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(dumbbellhelper.GetLeft());
+    dumbbellhelper.GetLeft()->GetObject<MobilityModel>()->SetPosition(Vector(50, 50, 0));
+    
+    mobility.SetPositionAllocator("ns3::UniformDiscPositionAllocator",
+        "rho", DoubleValue(20),
+        "X", DoubleValue(50),
+        "Y", DoubleValue(50)
+    );
+    for (int i = 0; i < n_nodes; i++)
+    {
+        mobility.Install(dumbbellhelper.GetLeft(i));
+    }
+
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(dumbbellhelper.GetRight());
+    dumbbellhelper.GetRight()->GetObject<MobilityModel>()->SetPosition(Vector(150, 150, 0));
+    mobility.SetPositionAllocator("ns3::UniformDiscPositionAllocator",
+        "rho", DoubleValue(20),
+        "X", DoubleValue(150),
+        "Y", DoubleValue(150)
+    );
+    for (int i = 0; i < n_nodes; i++)
+    {
+        mobility.Install(dumbbellhelper.GetRight(i));
+    }
     InternetStackHelper stack;
     dumbbellhelper.InstallStack(stack);
 
@@ -143,7 +172,7 @@ main(int argc, char* argv[])
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
 
-    // AnimationInterface anim("../animwifi.xml");
+    AnimationInterface anim("../animp2p.xml");
     Simulator::Stop(Seconds(runtime + 1));
     Simulator::Run();
 
