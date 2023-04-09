@@ -115,6 +115,21 @@ TraceDropRatio()
         MakeBoundCallback(&PhyRxDropTrace));
 }
 
+static void
+DataRateTrace (uint64_t currRate, uint64_t prevrate)
+{
+    std::cout << Simulator::Now().GetSeconds () << "\t Data Rate Now: " << currRate*1.0/(1024*1024) << "Mbps" << std::endl;
+}
+
+void
+TraceDataRate()
+{
+    Config::ConnectWithoutContext(
+        "/NodeList/" + std::to_string(0) +
+            "/DeviceList/0/$ns3::WifiNetDevice/RemoteStationManager/$ns3::MinstrelHtWifiManager/Rate",
+        MakeBoundCallback(&DataRateTrace));
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -140,11 +155,10 @@ main(int argc, char* argv[])
     }
 
     // Fix non-unicast data rate to be the same as that of unicast
-    Config::SetDefault("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue(phyMode));
+    // Config::SetDefault("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue(phyMode));
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
     // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("1p"));
-    // Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(2341072));
-    // Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(2431072));
+
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
     p2phelper.SetDeviceAttribute("DataRate", StringValue("11Mbps"));
@@ -163,6 +177,11 @@ main(int argc, char* argv[])
     // The below set of helpers will help us to put together the wifi NICs we want
     WifiHelper wifi;
     wifi.SetStandard(WIFI_STANDARD_80211n);
+    // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
+    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+                                "DataMode", StringValue(phyMode),
+                                "ControlMode", StringValue(phyMode)
+                                );
     // wifi.EnableLogComponents(); // Turn on all Wifi logging
 
     YansWifiPhyHelper wifiPhy;
@@ -174,6 +193,7 @@ main(int argc, char* argv[])
 
     YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
     wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+
     // The below FixedRssLossModel will cause the rss to be fixed regardless
     // of the distance between the two stations, and the transmit power
     wifiChannel.AddPropagationLoss("ns3::FixedRssLossModel", "Rss", DoubleValue(rss));
@@ -181,11 +201,6 @@ main(int argc, char* argv[])
 
     // Add a mac and disable rate control
     WifiMacHelper wifiMac;
-    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
-                                 "DataMode",
-                                 StringValue(phyMode),
-                                 "ControlMode",
-                                 StringValue(phyMode));
 
     // Setup the rest of the MAC
     Ssid ssid = Ssid("wifi-default");
@@ -200,7 +215,6 @@ main(int argc, char* argv[])
 
     // Note that with FixedRssLossModel, the positions below are not
     // used for received signal strength.
-
     MobilityHelper mobility;
 
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -231,10 +245,7 @@ main(int argc, char* argv[])
         mobility.Install(dumbbellhelper.GetRight(i));
     }
 
-    // Ptr<MobilityModel> mobModel = dumbbellhelper.GetLeft()->GetObject<MobilityModel>();
-    // mobModel->SetPosition(Vector(10, 10, 0));
-
-    std::cout << "Average delay of wifi nodes = " << GetAverageDelayOfWiFiNodes(leftwifinodes, dumbbellhelper.GetLeft()) << "ns"
+    std::cout << "Average delay of wifi channel = " << GetAverageDelayOfWiFiNodes(leftwifinodes, dumbbellhelper.GetLeft()) << "ns"
               << '\n';
 
     InternetStackHelper stack;
@@ -278,6 +289,7 @@ main(int argc, char* argv[])
     wifiPhy.EnablePcap("results/wifi_simul", apDevice);
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
+    // Simulator::Schedule(Seconds(1.001), &TraceDataRate);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
     Simulator::Schedule(Seconds(1.001), &TraceDropRatio);
 
