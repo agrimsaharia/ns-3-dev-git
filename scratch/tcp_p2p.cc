@@ -34,14 +34,15 @@ static void
 TraceCwnd()
 {
     AsciiTraceHelper asciiTraceHelper;
-    Ptr<OutputStreamWrapper> file = asciiTraceHelper.CreateFileStream("cwndp2p.csv");
+    Ptr<OutputStreamWrapper> file = asciiTraceHelper.CreateFileStream("results/cwndp2p.csv");
     Config::ConnectWithoutContext("/NodeList/0/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeBoundCallback(&CwndChange, file));
 }
 
 int main()
 {
     bool enable_log = false;
-    std::string tcp_type = "TcpBbr";
+    int runtime = 50; // Seconds
+    std::string tcp_type = "TcpCubic";
 
     if (enable_log)
     {
@@ -57,7 +58,7 @@ int main()
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2phelper.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    p2phelper.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
     // p2phelper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("10p"));
 
     NetDeviceContainer p2pdevices = p2phelper.Install(p2pnodes);
@@ -82,18 +83,18 @@ int main()
     apps.Add(blkhelper.Install(p2pnodes.Get(0)));
     apps.Add(sinkhelper.Install(p2pnodes.Get(1)));
 
-    apps.Get(0)->SetStartTime(Seconds(1.0));
-    apps.Get(0)->SetStopTime(Seconds(100.0));
+    apps.Get(0)->SetStartTime(Seconds(0.0));
+    apps.Get(0)->SetStopTime(Seconds(runtime));
 
     apps.Get(1)->SetStartTime(Seconds(0.0));
-    apps.Get(1)->SetStopTime(Seconds(200.0));
+    apps.Get(1)->SetStopTime(Seconds(runtime));
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
     Simulator::Schedule(Seconds(1.001), TraceCwnd);
 
-    // AnimationInterface anim("../anim.xml");
-    Simulator::Stop(Seconds(300.0));
+    AnimationInterface anim("../anim.xml");
+    Simulator::Stop(Seconds(runtime + 1));
     // p2phelper.EnablePcapAll("p2p");
 
     Simulator::Run();
