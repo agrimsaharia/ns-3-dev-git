@@ -104,7 +104,7 @@ main(int argc, char* argv[])
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
-    p2phelper.SetDeviceAttribute("DataRate", StringValue("11Mbps"));
+    p2phelper.SetDeviceAttribute("DataRate", StringValue("65Mbps"));
 
     PointToPointHelper p2pbottleneckhelper;
     p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
