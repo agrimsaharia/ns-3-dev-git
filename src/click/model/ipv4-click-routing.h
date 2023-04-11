@@ -26,19 +26,18 @@
 #include "ns3/packet.h"
 #include "ns3/test.h"
 
-#include <sys/time.h>
-#include <sys/types.h>
-
-#ifdef NS3_CLICK
-#include <click/simclick.h>
-#endif
-
 #include <map>
 #include <string>
+#include <sys/time.h>
+#include <sys/types.h>
 
 class ClickTrivialTest;
 class ClickIfidFromNameTest;
 class ClickIpMacAddressFromNameTest;
+// These are in #include <click/simclick.h>,
+// here we just need a forward declaration.
+struct simclick_node;
+typedef struct simclick_node simclick_node_t;
 
 namespace ns3
 {
@@ -263,10 +262,10 @@ class Ipv4ClickRouting : public Ipv4RoutingProtocol
     bool RouteInput(Ptr<const Packet> p,
                     const Ipv4Header& header,
                     Ptr<const NetDevice> idev,
-                    UnicastForwardCallback ucb,
-                    MulticastForwardCallback mcb,
-                    LocalDeliverCallback lcb,
-                    ErrorCallback ecb) override;
+                    const UnicastForwardCallback& ucb,
+                    const MulticastForwardCallback& mcb,
+                    const LocalDeliverCallback& lcb,
+                    const ErrorCallback& ecb) override;
     void PrintRoutingTable(Ptr<OutputStreamWrapper> stream,
                            Time::Unit unit = Time::S) const override;
     void NotifyInterfaceUp(uint32_t interface) override;

@@ -63,9 +63,11 @@ class WifiPhyThresholdsTest : public TestCase
     /**
      * Make wifi signal function
      * \param txPowerWatts the transmit power in watts
+     * \param channel the operating channel of the PHY used for the transmission
      * \returns Ptr<SpectrumSignalParameters>
      */
-    virtual Ptr<SpectrumSignalParameters> MakeWifiSignal(double txPowerWatts);
+    virtual Ptr<SpectrumSignalParameters> MakeWifiSignal(double txPowerWatts,
+                                                         const WifiPhyOperatingChannel& channel);
     /**
      * Make foreign signal function
      * \param txPowerWatts the transmit power in watts
@@ -110,7 +112,7 @@ class WifiPhyThresholdsTest : public TestCase
 
     Ptr<SpectrumWifiPhy> m_phy;   ///< PHY object
     uint32_t m_rxSuccess;         ///< count number of successfully received packets
-    uint32_t m_rxFailure;         ///< count number of unsuccessfully received packets
+    uint32_t m_rxFailure;         ///< count number of unsuccessfuly received packets
     uint32_t m_rxDropped;         ///< count number of dropped packets
     uint32_t m_stateChanged;      ///< count number of PHY state change
     uint32_t m_rxStateCount;      ///< count number of PHY state change to RX state
@@ -139,10 +141,17 @@ WifiPhyThresholdsTest::~WifiPhyThresholdsTest()
 }
 
 Ptr<SpectrumSignalParameters>
-WifiPhyThresholdsTest::MakeWifiSignal(double txPowerWatts)
+WifiPhyThresholdsTest::MakeWifiSignal(double txPowerWatts, const WifiPhyOperatingChannel& channel)
 {
-    WifiTxVector txVector =
-        WifiTxVector(OfdmPhy::GetOfdmRate6Mbps(), 0, WIFI_PREAMBLE_LONG, 800, 1, 1, 0, 20, false);
+    WifiTxVector txVector = WifiTxVector(OfdmPhy::GetOfdmRate6Mbps(),
+                                         0,
+                                         WIFI_PREAMBLE_LONG,
+                                         800,
+                                         1,
+                                         1,
+                                         0,
+                                         CHANNEL_WIDTH,
+                                         false);
 
     Ptr<Packet> pkt = Create<Packet>(1000);
     WifiMacHeader hdr;
@@ -153,18 +162,20 @@ WifiPhyThresholdsTest::MakeWifiSignal(double txPowerWatts)
     Ptr<WifiPsdu> psdu = Create<WifiPsdu>(pkt, hdr);
     Time txDuration = m_phy->CalculateTxDuration(psdu->GetSize(), txVector, m_phy->GetPhyBand());
 
-    Ptr<WifiPpdu> ppdu = Create<OfdmPpdu>(psdu, txVector, FREQUENCY, WIFI_PHY_BAND_5GHZ, 0);
+    Ptr<WifiPpdu> ppdu = Create<OfdmPpdu>(psdu, txVector, channel, 0);
 
     Ptr<SpectrumValue> txPowerSpectrum =
-        WifiSpectrumValueHelper::CreateHeOfdmTxPowerSpectralDensity(FREQUENCY,
-                                                                    CHANNEL_WIDTH,
-                                                                    txPowerWatts,
-                                                                    CHANNEL_WIDTH);
+        WifiSpectrumValueHelper::CreateHeOfdmTxPowerSpectralDensity(
+            channel.GetPrimaryChannelCenterFrequency(CHANNEL_WIDTH),
+            CHANNEL_WIDTH,
+            txPowerWatts,
+            CHANNEL_WIDTH);
     Ptr<WifiSpectrumSignalParameters> txParams = Create<WifiSpectrumSignalParameters>();
     txParams->psd = txPowerSpectrum;
     txParams->txPhy = nullptr;
     txParams->duration = txDuration;
     txParams->ppdu = ppdu;
+    txParams->txWidth = CHANNEL_WIDTH;
     return txParams;
 }
 
@@ -188,7 +199,7 @@ WifiPhyThresholdsTest::SendSignal(double txPowerWatts, bool wifiSignal)
 {
     if (wifiSignal)
     {
-        m_phy->StartRx(MakeWifiSignal(txPowerWatts));
+        m_phy->StartRx(MakeWifiSignal(txPowerWatts, m_phy->GetOperatingChannel()));
     }
     else
     {
@@ -406,7 +417,7 @@ WifiPhyThresholdsStrongWifiSignalTest::DoRun()
 
     NS_TEST_ASSERT_MSG_EQ(m_rxDropped + m_rxFailure,
                           0,
-                          "Packet reception should have been successfull");
+                          "Packet reception should have been successful");
     NS_TEST_ASSERT_MSG_EQ(m_rxSuccess, 1, "Packet should have been successfully received");
     NS_TEST_ASSERT_MSG_EQ(m_ccabusyStateCount, 2, "State should have moved to CCA_BUSY once");
     NS_TEST_ASSERT_MSG_EQ(

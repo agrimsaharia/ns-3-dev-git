@@ -125,7 +125,8 @@ function(build_lib)
     ${lib${BLIB_LIBNAME}}
     PROPERTIES
       PUBLIC_HEADER
-      "${BLIB_HEADER_FILES};${BLIB_DEPRECATED_HEADER_FILES};${config_headers};${BLIB_PRIVATE_HEADER_FILES};${CMAKE_HEADER_OUTPUT_DIRECTORY}/${BLIB_LIBNAME}-module.h"
+      "${BLIB_HEADER_FILES};${BLIB_DEPRECATED_HEADER_FILES};${config_headers};${CMAKE_HEADER_OUTPUT_DIRECTORY}/${BLIB_LIBNAME}-module.h"
+      PRIVATE_HEADER "${BLIB_PRIVATE_HEADER_FILES}"
       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} # set output
                                                                  # directory for
                                                                  # DLLs
@@ -142,6 +143,15 @@ function(build_lib)
 
   foreach(library ${BLIB_LIBRARIES_TO_LINK})
     remove_lib_prefix("${library}" module_name)
+
+    # Ignore the case where the library dependency name match the ns-3 module
+    # since it is most likely is due to brite, click and openflow collisions.
+    # All the ns-3 module targets should be prefixed with 'lib' to be
+    # differentiable.
+    if("${library}" STREQUAL "${BLIB_LIBNAME}")
+      list(APPEND non_ns_libraries_to_link ${library})
+      continue()
+    endif()
 
     # Check if the module exists in the ns-3 modules list or if it is a
     # 3rd-party library
@@ -191,6 +201,20 @@ function(build_lib)
   target_link_libraries(
     ${lib${BLIB_LIBNAME}} ${exported_libraries} ${private_libraries}
   )
+
+  if(NOT ${XCODE})
+    # Since linking libraries to object libraries in not allowed in older CMake
+    # releases, we need to import each of their include directories. Otherwise,
+    # include directories won't be properly propagated
+    set(temp)
+    foreach(target ${ns_libraries_to_link})
+      list(APPEND temp
+           "$<TARGET_PROPERTY:${target},INTERFACE_INCLUDE_DIRECTORIES>"
+      )
+    endforeach()
+    target_include_directories(${lib${BLIB_LIBNAME}}-obj PRIVATE ${temp})
+    unset(temp)
+  endif()
 
   # set output name of library
   set_target_properties(
@@ -244,9 +268,16 @@ function(build_lib)
 
   # Copy all header files to outputfolder/include before each build
   copy_headers_before_building_lib(
-    ${BLIB_LIBNAME} ${CMAKE_HEADER_OUTPUT_DIRECTORY}
-    "${BLIB_HEADER_FILES};${BLIB_PRIVATE_HEADER_FILES}" public
+    ${BLIB_LIBNAME} ${CMAKE_HEADER_OUTPUT_DIRECTORY} "${BLIB_HEADER_FILES}"
+    public
   )
+  if(BLIB_PRIVATE_HEADER_FILES)
+    copy_headers_before_building_lib(
+      ${BLIB_LIBNAME} ${CMAKE_HEADER_OUTPUT_DIRECTORY}
+      "${BLIB_PRIVATE_HEADER_FILES}" private
+    )
+  endif()
+
   if(BLIB_DEPRECATED_HEADER_FILES)
     copy_headers_before_building_lib(
       ${BLIB_LIBNAME} ${CMAKE_HEADER_OUTPUT_DIRECTORY}
@@ -354,6 +385,7 @@ function(build_lib)
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/
     RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/
     PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/ns3"
+    PRIVATE_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/ns3"
   )
   if(${NS3_VERBOSE})
     message(STATUS "Processed ${FOLDER}")

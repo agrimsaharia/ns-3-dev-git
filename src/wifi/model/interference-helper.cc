@@ -28,6 +28,7 @@
 #include "ns3/log.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
+#include "ns3/wifi-phy-operating-channel.h"
 
 #include <algorithm>
 #include <numeric>
@@ -88,7 +89,7 @@ Event::GetDuration() const
 double
 Event::GetRxPowerW() const
 {
-    NS_ASSERT(m_rxPowerW.size() > 0);
+    NS_ASSERT(!m_rxPowerW.empty());
     // The total RX power corresponds to the maximum over all the bands
     auto it = std::max_element(
         m_rxPowerW.begin(),
@@ -232,8 +233,9 @@ InterferenceHelper::AddForeignSignal(Time duration, RxPowerWattPerChannelBand& r
     WifiMacHeader hdr;
     hdr.SetType(WIFI_MAC_QOSDATA);
     hdr.SetQosTid(0);
-    Ptr<WifiPpdu> fakePpdu =
-        Create<WifiPpdu>(Create<WifiPsdu>(Create<Packet>(0), hdr), WifiTxVector(), 0);
+    Ptr<WifiPpdu> fakePpdu = Create<WifiPpdu>(Create<WifiPsdu>(Create<Packet>(0), hdr),
+                                              WifiTxVector(),
+                                              WifiPhyOperatingChannel());
     Add(fakePpdu, WifiTxVector(), duration, rxPowerW);
 }
 

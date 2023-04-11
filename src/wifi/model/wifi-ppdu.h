@@ -38,7 +38,9 @@
 namespace ns3
 {
 
+class Packet;
 class WifiPsdu;
+class WifiPhyOperatingChannel;
 
 /**
  * Map of const PSDUs indexed by STA-ID
@@ -59,24 +61,24 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
      *
      * \param psdu the PHY payload (PSDU)
      * \param txVector the TXVECTOR that was used for this PPDU
-     * \param txCenterFreq the center frequency (MHz) that was used for this PPDU
+     * \param channel the operating channel of the PHY used to transmit this PPDU
      * \param uid the unique ID of this PPDU
      */
     WifiPpdu(Ptr<const WifiPsdu> psdu,
              const WifiTxVector& txVector,
-             uint16_t txCenterFreq,
+             const WifiPhyOperatingChannel& channel,
              uint64_t uid = UINT64_MAX);
     /**
      * Create a PPDU storing a map of PSDUs.
      *
      * \param psdus the PHY payloads (PSDUs)
      * \param txVector the TXVECTOR that was used for this PPDU
-     * \param txCenterFreq the center frequency (MHz) that was used for this PPDU
+     * \param channel the operating channel of the PHY used to transmit this PPDU
      * \param uid the unique ID of this PPDU
      */
     WifiPpdu(const WifiConstPsduMap& psdus,
              const WifiTxVector& txVector,
-             uint16_t txCenterFreq,
+             const WifiPhyOperatingChannel& channel,
              uint64_t uid);
     /**
      * Destructor for WifiPpdu.
@@ -93,7 +95,14 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
     /**
      * Reset the TXVECTOR.
      */
-    void ResetTxVector();
+    void ResetTxVector() const;
+
+    /**
+     * Update the TXVECTOR based on some information known at the receiver.
+     *
+     * \param updatedTxVector the updated TXVECTOR.
+     */
+    void UpdateTxVector(const WifiTxVector& updatedTxVector) const;
 
     /**
      * Get the payload of the PPDU.
@@ -128,6 +137,11 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
     virtual uint16_t GetTransmissionChannelWidth() const;
 
     /**
+     * \return the center frequency (MHz) used for the transmission of this PPDU
+     */
+    uint16_t GetTxCenterFreq() const;
+
+    /**
      * Check whether the given PPDU overlaps a given channel.
      *
      * \param minFreq the minimum frequency (MHz) of the channel
@@ -135,15 +149,6 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
      * \return true if this PPDU overlaps the channel, false otherwise
      */
     bool DoesOverlapChannel(uint16_t minFreq, uint16_t maxFreq) const;
-
-    /**
-     * Check whether the given PPDU covers the whole channel.
-     *
-     * \param p20MinFreq the minimum frequency (MHz) of the primary channel
-     * \param p20MaxFreq the maximum frequency (MHz) of the primary channel
-     * \return true if this PPDU covers the whole channel, false otherwise
-     */
-    bool DoesCoverChannel(uint16_t p20MinFreq, uint16_t p20MaxFreq) const;
 
     /**
      * Get the modulation used for the PPDU.
@@ -199,6 +204,14 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
     WifiConstPsduMap m_psdus;         //!< the PSDUs contained in this PPDU
     uint16_t m_txCenterFreq; //!< the center frequency (MHz) used for the transmission of this PPDU
     uint64_t m_uid;          //!< the unique ID of this PPDU
+    mutable std::optional<WifiTxVector>
+        m_txVector; //!< the TXVECTOR at TX PHY or the reconstructed TXVECTOR at RX PHY (or
+                    //!< std::nullopt if TXVECTOR has not been reconstructed yet)
+    const WifiPhyOperatingChannel& m_operatingChannel; //!< the operating channel of the PHY
+
+#ifdef NS3_BUILD_PROFILE_DEBUG
+    Ptr<Packet> m_phyHeaders; //!< the PHY headers contained in this PPDU
+#endif
 
   private:
     /**
@@ -213,11 +226,7 @@ class WifiPpdu : public SimpleRefCount<WifiPpdu>
     uint8_t m_txPowerLevel; //!< the transmission power level (used only for TX and initializing the
                             //!< returned WifiTxVector)
     uint8_t m_txAntennas;   //!< the number of antennas used to transmit this PPDU
-
-    mutable std::optional<WifiTxVector>
-        m_txVector; //!< the TXVECTOR at TX PHY or the reconstructed TXVECTOR at RX PHY (or
-                    //!< std::nullopt if TXVECTOR has not been reconstructed yet)
-};                  // class WifiPpdu
+};                          // class WifiPpdu
 
 /**
  * \brief Stream insertion operator.

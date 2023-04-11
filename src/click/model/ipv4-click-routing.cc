@@ -29,6 +29,7 @@
 #include "ns3/random-variable-stream.h"
 #include "ns3/simulator.h"
 
+#include <click/simclick.h>
 #include <cstdarg>
 #include <cstdlib>
 #include <map>
@@ -562,10 +563,10 @@ bool
 Ipv4ClickRouting::RouteInput(Ptr<const Packet> p,
                              const Ipv4Header& header,
                              Ptr<const NetDevice> idev,
-                             UnicastForwardCallback ucb,
-                             MulticastForwardCallback mcb,
-                             LocalDeliverCallback lcb,
-                             ErrorCallback ecb)
+                             const UnicastForwardCallback& ucb,
+                             const MulticastForwardCallback& mcb,
+                             const LocalDeliverCallback& lcb,
+                             const ErrorCallback& ecb)
 {
     NS_FATAL_ERROR("Click router does not have a RouteInput() interface!");
     return false;
@@ -817,7 +818,7 @@ simclick_sim_command(simclick_node_t* simnode, int cmd, ...)
         // Try to fill the buffer with up to size bytes.
         // If this is not enough space, write the required buffer size into
         // the size variable and return an error code.
-        // Otherwise return the bytes actually writte into the buffer in size.
+        // Otherwise return the bytes actually written into the buffer in size.
 
         // Append key/value pair, separated by \0.
         std::map<std::string, std::string> defines = clickInstance->GetDefines();

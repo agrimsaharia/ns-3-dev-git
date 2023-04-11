@@ -51,7 +51,6 @@ class HePpdu : public OfdmPpdu
     {
       public:
         HeSigHeader();
-        ~HeSigHeader() override;
 
         /**
          * \brief Get the type ID.
@@ -164,16 +163,14 @@ class HePpdu : public OfdmPpdu
      *
      * \param psdu the PHY payload (PSDU)
      * \param txVector the TXVECTOR that was used for this PPDU
-     * \param txCenterFreq the center frequency (MHz) that was used for this PPDU
+     * \param channel the operating channel of the PHY used to transmit this PPDU
      * \param ppduDuration the transmission duration of this PPDU
-     * \param band the WifiPhyBand used for the transmission of this PPDU
      * \param uid the unique ID of this PPDU
      */
     HePpdu(Ptr<const WifiPsdu> psdu,
            const WifiTxVector& txVector,
-           uint16_t txCenterFreq,
+           const WifiPhyOperatingChannel& channel,
            Time ppduDuration,
-           WifiPhyBand band,
            uint64_t uid);
     /**
      * Create an MU HE PPDU, storing a map of PSDUs.
@@ -182,23 +179,17 @@ class HePpdu : public OfdmPpdu
      *
      * \param psdus the PHY payloads (PSDUs)
      * \param txVector the TXVECTOR that was used for this PPDU
-     * \param txCenterFreq the center frequency (MHz) that was used for this PPDU
+     * \param channel the operating channel of the PHY used to transmit this PPDU
      * \param ppduDuration the transmission duration of this PPDU
-     * \param band the WifiPhyBand used for the transmission of this PPDU
      * \param uid the unique ID of this PPDU or of the triggering PPDU if this is an HE TB PPDU
      * \param flag the flag indicating the type of Tx PSD to build
      */
     HePpdu(const WifiConstPsduMap& psdus,
            const WifiTxVector& txVector,
-           uint16_t txCenterFreq,
+           const WifiPhyOperatingChannel& channel,
            Time ppduDuration,
-           WifiPhyBand band,
            uint64_t uid,
            TxPsdFlag flag);
-    /**
-     * Destructor for HePpdu.
-     */
-    ~HePpdu() override;
 
     Time GetTxDuration() const override;
     Ptr<WifiPpdu> Copy() const override;
@@ -230,6 +221,15 @@ class HePpdu : public OfdmPpdu
     void SetTxPsdFlag(TxPsdFlag flag) const;
 
     /**
+     * Update the TXVECTOR for HE TB PPDUs, since the information to decode HE TB PPDUs
+     * is not available from the PHY headers but it requires information from the TRIGVECTOR
+     * of the AP expecting these HE TB PPDUs.
+     *
+     * \param trigVector the TRIGVECTOR or std::nullopt if no TRIGVECTOR is available at the caller
+     */
+    void UpdateTxVectorForUlMu(const std::optional<WifiTxVector>& trigVector) const;
+
+    /**
      * Check if STA ID is in HE SIG-B Content Channel ID
      * \param staId STA ID
      * \param channelId Content Channel ID
@@ -245,34 +245,20 @@ class HePpdu : public OfdmPpdu
     bool IsAllocated(uint16_t staId) const;
 
   protected:
-    std::string PrintPayload() const override;
-    WifiTxVector DoGetTxVector() const override;
-
     /**
-     * Return true if the PPDU is a MU PPDU
-     * \return true if the PPDU is a MU PPDU
-     */
-    virtual bool IsMu() const;
-    /**
-     * Return true if the PPDU is a DL MU PPDU
-     * \return true if the PPDU is a DL MU PPDU
-     */
-    virtual bool IsDlMu() const;
-    /**
-     * Return true if the PPDU is an UL MU PPDU
-     * \return true if the PPDU is an UL MU PPDU
-     */
-    virtual bool IsUlMu() const;
-
-    /**
-     * Fill in the HE PHY headers.
+     * Fill in the TXVECTOR from PHY headers.
      *
-     * \param txVector the TXVECTOR that was used for this PPDU
-     * \param ppduDuration the transmission duration of this PPDU
+     * \param txVector the TXVECTOR to fill in
+     * \param lSig the L-SIG header
+     * \param heSig the HE-SIG header
      */
-    virtual void SetPhyHeaders(const WifiTxVector& txVector, Time ppduDuration);
+    virtual void SetTxVectorFromPhyHeaders(WifiTxVector& txVector,
+                                           const LSigHeader& lSig,
+                                           const HeSigHeader& heSig) const;
 
-    HeSigHeader m_heSig;           //!< the HE-SIG PHY header
+#ifndef NS3_BUILD_PROFILE_DEBUG
+    HeSigHeader m_heSig; //!< the HE-SIG PHY header
+#endif
     mutable TxPsdFlag m_txPsdFlag; //!< the transmit power spectral density flag
 
     WifiTxVector::HeMuUserInfoMap m_muUserInfos; //!< HE MU specific per-user information (to be
@@ -282,7 +268,53 @@ class HePpdu : public OfdmPpdu
                                //!< headers are implemented)
     RuAllocation m_ruAllocation; //!< RU_ALLOCATION in SIG-B common field (to be removed once
                                  //!< HE-SIG-B headers are implemented)
-};                               // class HePpdu
+
+  private:
+    std::string PrintPayload() const override;
+    WifiTxVector DoGetTxVector() const override;
+
+    /**
+     * Return true if the PPDU is a MU PPDU
+     * \return true if the PPDU is a MU PPDU
+     */
+    virtual bool IsMu() const;
+
+    /**
+     * Return true if the PPDU is a DL MU PPDU
+     * \return true if the PPDU is a DL MU PPDU
+     */
+    virtual bool IsDlMu() const;
+
+    /**
+     * Return true if the PPDU is an UL MU PPDU
+     * \return true if the PPDU is an UL MU PPDU
+     */
+    virtual bool IsUlMu() const;
+
+    /**
+     * Fill in the PHY headers.
+     *
+     * \param txVector the TXVECTOR that was used for this PPDU
+     * \param ppduDuration the transmission duration of this PPDU
+     */
+    virtual void SetPhyHeaders(const WifiTxVector& txVector, Time ppduDuration);
+
+    /**
+     * Fill in the L-SIG header.
+     *
+     * \param lSig the L-SIG header to fill in
+     * \param ppduDuration the transmission duration of this PPDU
+     */
+    virtual void SetLSigHeader(LSigHeader& lSig, Time ppduDuration) const;
+
+    /**
+     * Fill in the HE-SIG header.
+     *
+     * \param heSig the HE-SIG header to fill in
+     * \param txVector the TXVECTOR that was used for this PPDU
+     */
+    void SetHeSigHeader(HeSigHeader& heSig, const WifiTxVector& txVector) const;
+}; // class HePpdu
 
 /**
  * \brief Stream insertion operator.

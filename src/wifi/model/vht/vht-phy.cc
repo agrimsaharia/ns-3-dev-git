@@ -250,10 +250,8 @@ VhtPhy::BuildPpdu(const WifiConstPsduMap& psdus, const WifiTxVector& txVector, T
     NS_LOG_FUNCTION(this << psdus << txVector << ppduDuration);
     return Create<VhtPpdu>(psdus.begin()->second,
                            txVector,
-                           m_wifiPhy->GetOperatingChannel().GetPrimaryChannelCenterFrequency(
-                               txVector.GetChannelWidth()),
+                           m_wifiPhy->GetOperatingChannel(),
                            ppduDuration,
-                           m_wifiPhy->GetPhyBand(),
                            ObtainNextUid(txVector));
 }
 
@@ -552,7 +550,7 @@ VhtPhy::GetCcaThreshold(const Ptr<const WifiPpdu> ppdu, WifiChannelListType chan
         {
         case WIFI_CHANLIST_PRIMARY: {
             // Start of a PPDU for which its power measured within the primary 20 MHz channel is at
-            // or above the CCA sensitivy threshold.
+            // or above the CCA sensitivity threshold.
             return m_wifiPhy->GetCcaSensitivityThreshold();
         }
         case WIFI_CHANLIST_SECONDARY:

@@ -47,31 +47,27 @@ class EhtPpdu : public HePpdu
      *
      * \param psdus the PHY payloads (PSDUs)
      * \param txVector the TXVECTOR that was used for this PPDU
-     * \param txCenterFreq the center frequency (MHz) that was used for this PPDU
+     * \param channel the operating channel of the PHY used to transmit this PPDU
      * \param ppduDuration the transmission duration of this PPDU
-     * \param band the WifiPhyBand used for the transmission of this PPDU
      * \param uid the unique ID of this PPDU or of the triggering PPDU if this is an EHT TB PPDU
      * \param flag the flag indicating the type of Tx PSD to build
      */
     EhtPpdu(const WifiConstPsduMap& psdus,
             const WifiTxVector& txVector,
-            uint16_t txCenterFreq,
+            const WifiPhyOperatingChannel& channel,
             Time ppduDuration,
-            WifiPhyBand band,
             uint64_t uid,
             TxPsdFlag flag);
-    /**
-     * Destructor for EhtPpdu.
-     */
-    ~EhtPpdu() override;
 
     WifiPpduType GetType() const override;
     Ptr<WifiPpdu> Copy() const override;
 
-  protected:
+  private:
     bool IsDlMu() const override;
     bool IsUlMu() const override;
-    WifiTxVector DoGetTxVector() const override;
+    void SetTxVectorFromPhyHeaders(WifiTxVector& txVector,
+                                   const LSigHeader& lSig,
+                                   const HeSigHeader& heSig) const override;
 
     uint8_t m_ehtSuMcs{0};      //!< EHT-MCS for EHT SU transmissions
     uint8_t m_ehtSuNStreams{1}; //!< Number of streams for EHT SU transmissions

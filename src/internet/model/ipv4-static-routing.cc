@@ -503,10 +503,10 @@ bool
 Ipv4StaticRouting::RouteInput(Ptr<const Packet> p,
                               const Ipv4Header& ipHeader,
                               Ptr<const NetDevice> idev,
-                              UnicastForwardCallback ucb,
-                              MulticastForwardCallback mcb,
-                              LocalDeliverCallback lcb,
-                              ErrorCallback ecb)
+                              const UnicastForwardCallback& ucb,
+                              const MulticastForwardCallback& mcb,
+                              const LocalDeliverCallback& lcb,
+                              const ErrorCallback& ecb)
 {
     NS_LOG_FUNCTION(this << p << ipHeader << ipHeader.GetSource() << ipHeader.GetDestination()
                          << idev << &ucb << &mcb << &lcb << &ecb);
@@ -756,7 +756,7 @@ Ipv4StaticRouting::PrintRoutingTable(Ptr<OutputStreamWrapper> stream, Time::Unit
             // Use not implemented
             *os << "-"
                 << "   ";
-            if (Names::FindName(m_ipv4->GetNetDevice(route.GetInterface())) != "")
+            if (!Names::FindName(m_ipv4->GetNetDevice(route.GetInterface())).empty())
             {
                 *os << Names::FindName(m_ipv4->GetNetDevice(route.GetInterface()));
             }
