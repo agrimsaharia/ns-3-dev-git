@@ -84,23 +84,23 @@ TraceCwnd()
 int
 main(int argc, char* argv[])
 {
-    uint32_t payloadSize = 1472;           /* Transport layer payload size in bytes. */
-    std::string dataRate = "100Mbps";      /* Application layer datarate. */
     std::string tcp_mode = "TcpCubic";
     int runtime = 50; // Seconds
     bool enable_log = false;
+    bool enable_pcap = false;
+    bool enable_anim = false;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("dataRate", "Application data rate", dataRate);
-    cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
     cmd.AddValue("numnodes", "number of senders in simulation", n_nodes);
     cmd.AddValue("logging", "turn on all Application log components", enable_log);
     cmd.AddValue("tcpmode", "specify the type of tcp socket", tcp_mode);
     cmd.AddValue("runtime", "Time (in Seconds) sender applications run", runtime);
+    cmd.AddValue("pcap", "Enable Pcap for selected devices", enable_pcap);
+    cmd.AddValue("anim", "Enable animation", enable_anim);
+
     cmd.Parse(argc, argv);
 
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
-    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
@@ -108,11 +108,10 @@ main(int argc, char* argv[])
 
     PointToPointHelper p2pbottleneckhelper;
     p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("20Mbps"));
+    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
 
     PointToPointDumbbellHelper dumbbellhelper(n_nodes, p2phelper, n_nodes, p2phelper, p2pbottleneckhelper);
     
-
     MobilityHelper mobility;
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobility.Install(dumbbellhelper.GetLeft());
@@ -153,16 +152,15 @@ main(int argc, char* argv[])
     ApplicationContainer senderApps;
     for (int i = 0; i < n_nodes; i++)
     {
-        OnOffHelper server("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        server.SetAttribute("PacketSize", UintegerValue(payloadSize));
-        server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-        server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-        server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
-        senderApps.Add(server.Install(dumbbellhelper.GetLeft(i)));
+        // OnOffHelper server("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        // server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+        // server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+        // server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
+        // senderApps.Add(server.Install(dumbbellhelper.GetLeft(i)));
  
-        // BulkSendHelper blksender("ns3::TcpSocketFactory",
-        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        // senderApps.Add(blksender.Install(dumbbellhelper.GetLeft(i)));
+        BulkSendHelper blksender("ns3::TcpSocketFactory",
+                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        senderApps.Add(blksender.Install(dumbbellhelper.GetLeft(i)));
     }
 
     ApplicationContainer recvApps;
@@ -182,7 +180,12 @@ main(int argc, char* argv[])
     recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    p2pbottleneckhelper.EnablePcap("results/p2p_simul", dumbbellhelper.GetLeft()->GetDevice(0), false);
+    if (enable_pcap)
+    {
+        p2pbottleneckhelper.EnablePcap("results/p2p_router", dumbbellhelper.GetLeft()->GetDevice(0), false);
+        p2pbottleneckhelper.EnablePcap("results/p2p_node", dumbbellhelper.GetLeft(0)->GetDevice(0), false);
+        p2pbottleneckhelper.EnablePcap("results/p2p_router", dumbbellhelper.GetRight()->GetDevice(0), false);
+    }
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
@@ -193,7 +196,8 @@ main(int argc, char* argv[])
         LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
     }
 
-    AnimationInterface anim("../animp2p.xml");
+    if (enable_anim) AnimationInterface anim("../animp2p.xml");
+
     Simulator::Stop(Seconds(runtime + 1));
     Simulator::Run();
 

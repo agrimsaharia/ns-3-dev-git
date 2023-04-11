@@ -21,5 +21,5 @@ for i in range(2, sys.argv.__len__()-1):
 plt.locator_params(axis='y', nbins=15)
 plt.grid()
 plt.legend(loc='upper left')
-plt.savefig("cwndScaling/" + figname)
-plt.show()
+plt.savefig("/home/agrim/repos/ns3/ns-3-dev-git/results/cwndScaling/" + figname)
+# plt.show()

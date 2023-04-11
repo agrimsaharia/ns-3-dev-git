@@ -142,25 +142,25 @@ TraceDropRatio()
 int
 main(int argc, char* argv[])
 {
-    uint32_t payloadSize = 1472;           /* Transport layer payload size in bytes. */
-    std::string dataRate = "100Mbps";      /* Application layer datarate. */
     std::string phyMode("HtMcs7");
     std::string tcp_mode = "TcpCubic";
     int runtime = 50; // Seconds
     bool enable_log = false;
+    bool enable_pcap = false;
+    bool enable_anim = false;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("dataRate", "Application data rate", dataRate);
-    cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
     cmd.AddValue("numnodes", "number of senders in simulation", n_nodes);
     cmd.AddValue("logging", "turn on all Application log components", enable_log);
     cmd.AddValue("tcpmode", "specify the type of tcp socket", tcp_mode);
     cmd.AddValue("runtime", "Time (in Seconds) sender applications run", runtime);
+    cmd.AddValue("pcap", "Enable Pcap for selected devices", enable_pcap);
+    cmd.AddValue("anim", "Enable animation", enable_anim);
     cmd.AddValue("phyMode", "Wifi Phy mode", phyMode);
+
     cmd.Parse(argc, argv);
 
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
-    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
@@ -168,7 +168,7 @@ main(int argc, char* argv[])
 
     PointToPointHelper p2pbottleneckhelper;
     p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("20Mbps"));
+    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
 
     NodeContainer leftwifinodes(n_nodes);
     PointToPointDumbbellHelper dumbbellhelper(0,
@@ -259,16 +259,15 @@ main(int argc, char* argv[])
     ApplicationContainer senderApps;
     for (int i = 0; i < n_nodes; i++)
     {
-        OnOffHelper server("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        server.SetAttribute("PacketSize", UintegerValue(payloadSize));
-        server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-        server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-        server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
-        senderApps.Add(server.Install(leftwifinodes.Get(i)));
+        // OnOffHelper server("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        // server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+        // server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+        // server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
+        // senderApps.Add(server.Install(leftwifinodes.Get(i)));
         
-        // BulkSendHelper blksender("ns3::TcpSocketFactory",
-        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        // senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
+        BulkSendHelper blksender("ns3::TcpSocketFactory",
+                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
     }
 
     ApplicationContainer recvApps;
@@ -288,10 +287,13 @@ main(int argc, char* argv[])
     recvApps.Stop(Seconds(runtime));
 
     // Tracing
-    wifiPhy.EnablePcap("results/wifi_ap", apDevice);
-    wifiPhy.EnablePcap("results/wifi_node", staDevices);
-    p2pbottleneckhelper.EnablePcap("results/wifi_router1", dumbbellhelper.GetLeft()->GetDevice(0));
-    p2pbottleneckhelper.EnablePcap("results/wifi_router2", dumbbellhelper.GetRight()->GetDevice(0));
+    if (enable_pcap)
+    {
+        wifiPhy.EnablePcap("results/wifi_ap", apDevice);
+        wifiPhy.EnablePcap("results/wifi_node", staDevices.Get(0));
+        p2pbottleneckhelper.EnablePcap("results/wifi_router1", dumbbellhelper.GetLeft()->GetDevice(0));
+        p2pbottleneckhelper.EnablePcap("results/wifi_router2", dumbbellhelper.GetRight()->GetDevice(0));
+    }
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
@@ -305,7 +307,8 @@ main(int argc, char* argv[])
         LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
     }
 
-    AnimationInterface anim("../animwifi.xml");
+    if (enable_anim) AnimationInterface anim("../animwifi.xml");
+    
     Simulator::Stop(Seconds(runtime + 1));
     Simulator::Run();
 
