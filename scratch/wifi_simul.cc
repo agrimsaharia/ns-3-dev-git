@@ -10,12 +10,11 @@
 #include "ns3/mobility-helper.h"
 #include "ns3/mobility-model.h"
 #include "ns3/point-to-point-dumbbell.h"
-#include "ns3/ssid.h"
 #include "ns3/string.h"
+#include "ns3/ssid.h"
 #include "ns3/yans-wifi-channel.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/random-walk-2d-mobility-model.h"
-
 
 /*
                    Network Topology
@@ -26,47 +25,11 @@ n1 -------------/   p2p bottleneck  \---------------n3
 */
 
 
-
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("Wifi_simul");
+NS_LOG_COMPONENT_DEFINE("wifi_simul");
 
 int n_nodes = 1;
-int pktsRecvAP = 0, pktsDropAP = 0;
-
-static double
-GetAverageDelayOfWiFiNodes(NodeContainer &staNodes, Ptr<Node> apNode)
-{
-    double avgDelay = 0;
-    for(uint32_t i = 0; i < staNodes.GetN(); i++)
-    {
-        avgDelay += std::sqrt(MobilityHelper::GetDistanceSquaredBetween(staNodes.Get(i), apNode)) * 1000000000.0 / 299792458;
-    }
-    avgDelay /= staNodes.GetN();
-    return avgDelay;
-}
-
-static void
-PhyRxBeginTrace(Ptr<const Packet> packet, RxPowerWattPerChannelBand rxPowersW)
-{
-    pktsRecvAP++;
-}
-
-static void
-PhyRxDropTrace(Ptr<const Packet> packet, ns3::WifiPhyRxfailureReason reason)
-{
-    pktsDropAP++;
-    // std::cout << reason << std::endl;
-}
-
-static void
-GoodputChange(Ptr<OutputStreamWrapper> file, Ptr<PacketSink> sink1, double prevBytesThrough)
-{
-    double recvBytes = sink1->GetTotalRx();
-    double throughput = ((recvBytes - prevBytesThrough) * 8);
-    *file->GetStream() << Simulator::Now().GetSeconds() << "," << throughput << std::endl;
-    Simulator::Schedule(MilliSeconds(1.0), &GoodputChange, file, sink1, recvBytes);
-}
 
 static void
 CwndChange(Ptr<OutputStreamWrapper> file, uint32_t oldval, uint32_t newval)
@@ -88,18 +51,31 @@ TraceCwnd()
     }
 }
 
-static void
-TraceGoodput(ApplicationContainer* apps)
+static double
+GetAverageDelayOfWiFiNodes(NodeContainer &staNodes, Ptr<Node> apNode)
 {
-    AsciiTraceHelper asciiTraceHelper;
-    for (int i = 0; i < n_nodes; i++)
+    double avgDelay = 0;
+    for(uint32_t i = 0; i < staNodes.GetN(); i++)
     {
-        Ptr<OutputStreamWrapper> file =
-            asciiTraceHelper.CreateFileStream("results/wifi_goodput" + std::to_string(i) + ".csv");
-        Simulator::Schedule(
-            MilliSeconds(1.0),
-            MakeBoundCallback(&GoodputChange, file, apps->Get(i)->GetObject<PacketSink>(), 0.0));
+        avgDelay += std::sqrt(MobilityHelper::GetDistanceSquaredBetween(staNodes.Get(i), apNode)) * 1000000000.0 / 299792458;
     }
+    avgDelay /= staNodes.GetN();
+    return avgDelay;
+}
+
+int pktsRecvAP = 0, pktsDropAP = 0;
+
+static void
+PhyRxBeginTrace(Ptr<const Packet> packet, RxPowerWattPerChannelBand rxPowersW)
+{
+    pktsRecvAP++;
+}
+
+static void
+PhyRxDropTrace(Ptr<const Packet> packet, ns3::WifiPhyRxfailureReason reason)
+{
+    pktsDropAP++;
+    // std::cout << reason << std::endl;
 }
 
 void
@@ -114,6 +90,29 @@ TraceDropRatio()
             "/DeviceList/1/$ns3::WifiNetDevice/Phy/$ns3::WifiPhy/PhyRxDrop",
         MakeBoundCallback(&PhyRxDropTrace));
 }
+
+// static void
+// GoodputChange(Ptr<OutputStreamWrapper> file, Ptr<PacketSink> sink1, double prevBytesThrough)
+// {
+//     double recvBytes = sink1->GetTotalRx();
+//     double throughput = ((recvBytes - prevBytesThrough) * 8);
+//     *file->GetStream() << Simulator::Now().GetSeconds() << "," << throughput << std::endl;
+//     Simulator::Schedule(MilliSeconds(1.0), &GoodputChange, file, sink1, recvBytes);
+// }
+
+// static void
+// TraceGoodput(ApplicationContainer* apps)
+// {
+//     AsciiTraceHelper asciiTraceHelper;
+//     for (int i = 0; i < n_nodes; i++)
+//     {
+//         Ptr<OutputStreamWrapper> file =
+//             asciiTraceHelper.CreateFileStream("results/wifi_goodput" + std::to_string(i) + ".csv");
+//         Simulator::Schedule(
+//             MilliSeconds(1.0),
+//             MakeBoundCallback(&GoodputChange, file, apps->Get(i)->GetObject<PacketSink>(), 0.0));
+//     }
+// }
 
 // static void
 // DataRateTrace (uint64_t currRate, uint64_t prevrate)
@@ -143,32 +142,25 @@ TraceDropRatio()
 int
 main(int argc, char* argv[])
 {
-    std::string phyMode("DsssRate11Mbps");
+    uint32_t payloadSize = 1472;           /* Transport layer payload size in bytes. */
+    std::string dataRate = "100Mbps";      /* Application layer datarate. */
+    std::string phyMode("HtMcs7");
     std::string tcp_mode = "TcpCubic";
     int runtime = 50; // Seconds
-    double rss = -80; // -dBm
     bool enable_log = false;
 
     CommandLine cmd(__FILE__);
+    cmd.AddValue("dataRate", "Application data rate", dataRate);
+    cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
     cmd.AddValue("numnodes", "number of senders in simulation", n_nodes);
     cmd.AddValue("logging", "turn on all Application log components", enable_log);
     cmd.AddValue("tcpmode", "specify the type of tcp socket", tcp_mode);
     cmd.AddValue("runtime", "Time (in Seconds) sender applications run", runtime);
     cmd.AddValue("phyMode", "Wifi Phy mode", phyMode);
-    cmd.AddValue("rss", "received signal strength", rss);
     cmd.Parse(argc, argv);
 
-    if (enable_log)
-    {
-        LogComponentEnable("BulkSendApplication", LOG_LEVEL_INFO);
-        LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
-    }
-
-    // Fix non-unicast data rate to be the same as that of unicast
-    // Config::SetDefault("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue(phyMode));
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcp_mode));
-    // Config::SetDefault("ns3::TcpSocketBase::Sack", BooleanValue(false));
-    // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("10p"));
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
 
     PointToPointHelper p2phelper;
     p2phelper.SetChannelAttribute("Delay", StringValue("50ns"));
@@ -176,7 +168,7 @@ main(int argc, char* argv[])
 
     PointToPointHelper p2pbottleneckhelper;
     p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("1Mbps"));
+    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("20Mbps"));
 
     NodeContainer leftwifinodes(n_nodes);
     PointToPointDumbbellHelper dumbbellhelper(0,
@@ -185,49 +177,41 @@ main(int argc, char* argv[])
                                               p2phelper,
                                               p2pbottleneckhelper);
 
-    // The below set of helpers will help us to put together the wifi NICs we want
-    WifiHelper wifi;
-    wifi.SetStandard(WIFI_STANDARD_80211n);
-    // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
-    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
-                                "DataMode", StringValue(phyMode),
-                                "ControlMode", StringValue(phyMode)
-                                );
-    // wifi.EnableLogComponents(); // Turn on all Wifi logging
+    WifiHelper wifiHelper;
+    wifiHelper.SetStandard(WIFI_STANDARD_80211n);
 
+    /* Set up Legacy Channel */
+    YansWifiChannelHelper wifiChannel;
+    wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+    wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel", "Frequency", DoubleValue(5e9));
+
+    /* Setup Physical Layer */
     YansWifiPhyHelper wifiPhy;
-    // This is one parameter that matters when using FixedRssLossModel
-    // set it to zero; otherwise, gain will be added
-    wifiPhy.Set("RxGain", DoubleValue(0));
-    // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
+    wifiPhy.SetChannel(wifiChannel.Create());
+    wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
+    wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+                                       "DataMode",
+                                       StringValue(phyMode),
+                                       "ControlMode",
+                                       StringValue("HtMcs0"));
+
+    // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
+
     wifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
-    YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
-    wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-
-    // The below FixedRssLossModel will cause the rss to be fixed regardless
-    // of the distance between the two stations, and the transmit power
-    wifiChannel.AddPropagationLoss("ns3::FixedRssLossModel", "Rss", DoubleValue(rss));
-    wifiPhy.SetChannel(wifiChannel.Create());
-
-    // Add a mac and disable rate control
     WifiMacHelper wifiMac;
-
-    // Setup the rest of the MAC
     Ssid ssid = Ssid("wifi-default");
-    // setup STA
+    
     wifiMac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
-    NetDeviceContainer staDevices = wifi.Install(wifiPhy, wifiMac, leftwifinodes);
-    NetDeviceContainer devices = staDevices;
-    // setup AP
+    NetDeviceContainer staDevices = wifiHelper.Install(wifiPhy, wifiMac, leftwifinodes);
+    
     wifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-    NetDeviceContainer apDevice = wifi.Install(wifiPhy, wifiMac, dumbbellhelper.GetLeft());
+    NetDeviceContainer apDevice = wifiHelper.Install(wifiPhy, wifiMac, dumbbellhelper.GetLeft());
+    
+    NetDeviceContainer devices = staDevices;
     devices.Add(apDevice);
 
-    // Note that with FixedRssLossModel, the positions below are not
-    // used for received signal strength.
     MobilityHelper mobility;
-
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobility.Install(dumbbellhelper.GetLeft());
     dumbbellhelper.GetLeft()->GetObject<MobilityModel>()->SetPosition(Vector(50, 50, 0));
@@ -275,17 +259,16 @@ main(int argc, char* argv[])
     ApplicationContainer senderApps;
     for (int i = 0; i < n_nodes; i++)
     {
-        // OnOffHelper onoffhelper("ns3::TcpSocketFactory",
-        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800)
-        //                          );
-        // onoffhelper.SetConstantRate(DataRate(100*1024*1024));
-        // senderApps.Add(onoffhelper.Install(leftwifinodes.Get(i)));
-
-        // senderApps.Get(i)->TraceConnectWithoutContext("Tx", MakeCallback(&TraceTx));
-
-        BulkSendHelper blksender("ns3::TcpSocketFactory",
-                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
+        OnOffHelper server("ns3::TcpSocketFactory", InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        server.SetAttribute("PacketSize", UintegerValue(payloadSize));
+        server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+        server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+        server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
+        senderApps.Add(server.Install(leftwifinodes.Get(i)));
+        
+        // BulkSendHelper blksender("ns3::TcpSocketFactory",
+        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        // senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
     }
 
     ApplicationContainer recvApps;
@@ -311,9 +294,16 @@ main(int argc, char* argv[])
     p2pbottleneckhelper.EnablePcap("results/wifi_router2", dumbbellhelper.GetRight()->GetDevice(0));
 
     Simulator::Schedule(Seconds(1.001), &TraceCwnd);
-    // Simulator::Schedule(Seconds(1.001), &TraceDataRate);
     // Simulator::Schedule(Seconds(1.001), MakeBoundCallback(&TraceGoodput, &recvApps));
+    // Simulator::Schedule(Seconds(1.001), &TraceDataRate);
     Simulator::Schedule(Seconds(1.001), &TraceDropRatio);
+
+    if (enable_log)
+    {
+        wifiHelper.EnableLogComponents(); // Turn on all Wifi logging
+        LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
+        LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
+    }
 
     AnimationInterface anim("../animwifi.xml");
     Simulator::Stop(Seconds(runtime + 1));
