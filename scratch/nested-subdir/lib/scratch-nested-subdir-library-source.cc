@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2005, 2009 INRIA
- * Copyright (c) 2009 MIRKO BANCHI
- *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation;
@@ -14,41 +11,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Author: Mirko Banchi <mk.banchi@gmail.com>
  */
 
-#include "qos-blocked-destinations.h"
+// This file contains the implementation of the functions declared in the
+// corresponding header file.
 
-#include "ns3/mac48-address.h"
+#include "scratch-nested-subdir-library-header.h"
 
 namespace ns3
 {
 
-QosBlockedDestinations::QosBlockedDestinations()
+std::string
+ScratchNestedSubdirGetMessage()
 {
-}
-
-QosBlockedDestinations::~QosBlockedDestinations()
-{
-}
-
-bool
-QosBlockedDestinations::IsBlocked(Mac48Address dest, uint8_t tid) const
-{
-    return m_blockedQosPackets.find({dest, tid}) != m_blockedQosPackets.end();
-}
-
-void
-QosBlockedDestinations::Block(Mac48Address dest, uint8_t tid)
-{
-    m_blockedQosPackets.insert({dest, tid});
-}
-
-void
-QosBlockedDestinations::Unblock(Mac48Address dest, uint8_t tid)
-{
-    m_blockedQosPackets.erase({dest, tid});
+    return "Scratch Nested Subdir";
 }
 
 } // namespace ns3

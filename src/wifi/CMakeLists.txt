@@ -76,7 +76,6 @@ set(source_files
     model/originator-block-ack-agreement.cc
     model/phy-entity.cc
     model/preamble-detection-model.cc
-    model/qos-blocked-destinations.cc
     model/qos-frame-exchange-manager.cc
     model/qos-txop.cc
     model/qos-utils.cc
@@ -225,7 +224,6 @@ set(header_files
     model/originator-block-ack-agreement.h
     model/phy-entity.h
     model/preamble-detection-model.h
-    model/qos-blocked-destinations.h
     model/qos-frame-exchange-manager.h
     model/qos-txop.h
     model/qos-utils.h
@@ -341,9 +339,11 @@ build_lib(
     test/wifi-phy-reception-test.cc
     test/wifi-phy-thresholds-test.cc
     test/wifi-primary-channels-test.cc
+    test/wifi-ru-allocation-test.cc
     test/wifi-channel-switching-test.cc
     test/wifi-test.cc
     test/wifi-transmit-mask-test.cc
     test/wifi-txop-test.cc
     test/wifi-phy-cca-test.cc
+    test/wifi-non-ht-dup-test.cc
 )

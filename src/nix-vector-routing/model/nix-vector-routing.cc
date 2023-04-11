@@ -870,10 +870,10 @@ bool
 NixVectorRouting<T>::RouteInput(Ptr<const Packet> p,
                                 const IpHeader& header,
                                 Ptr<const NetDevice> idev,
-                                UnicastForwardCallback ucb,
-                                MulticastForwardCallback mcb,
-                                LocalDeliverCallback lcb,
-                                ErrorCallback ecb)
+                                const UnicastForwardCallback& ucb,
+                                const MulticastForwardCallback& mcb,
+                                const LocalDeliverCallback& lcb,
+                                const ErrorCallback& ecb)
 {
     NS_LOG_FUNCTION(this << p << header << header.GetSource() << header.GetDestination() << idev);
 
@@ -1147,7 +1147,7 @@ NixVectorRouting<T>::BFS(uint32_t numberOfNodes,
     parentVector.at(source->GetId()) = source;
 
     // BFS loop
-    while (greyNodeList.size() != 0)
+    while (!greyNodeList.empty())
     {
         Ptr<Node> currNode = greyNodeList.front();
         Ptr<IpL3Protocol> ip = currNode->GetObject<IpL3Protocol>();

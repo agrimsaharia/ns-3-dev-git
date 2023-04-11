@@ -353,7 +353,7 @@ class RoutingTable
      * \param id destination address
      * \param rt entry with destination address dst, if exists
      * \param forRouteInput for routing input
-     * \return true on success
+     * \return true onns3  success
      */
     bool LookupRoute(Ipv4Address id, RoutingTableEntry& rt, bool forRouteInput);
     /**
@@ -432,7 +432,7 @@ class RoutingTable
      */
     bool ForceDeleteIpv4Event(Ipv4Address address);
     /**
-     * Get the EcentId associated with that address.
+     * Get the EventId associated with that address.
      * \param address destination address for which this event is running.
      * \return EventId on finding out an event is associated else return NULL.
      */

@@ -391,10 +391,10 @@ bool
 RoutingProtocol::RouteInput(Ptr<const Packet> p,
                             const Ipv4Header& header,
                             Ptr<const NetDevice> idev,
-                            UnicastForwardCallback ucb,
-                            MulticastForwardCallback mcb,
-                            LocalDeliverCallback lcb,
-                            ErrorCallback ecb)
+                            const UnicastForwardCallback& ucb,
+                            const MulticastForwardCallback& mcb,
+                            const LocalDeliverCallback& lcb,
+                            const ErrorCallback& ecb)
 {
     NS_LOG_FUNCTION(m_mainAddress << " received packet " << p->GetUid() << " from "
                                   << header.GetSource() << " on interface " << idev->GetAddress()
@@ -826,7 +826,7 @@ RoutingProtocol::RecvDsdv(Ptr<Socket> socket)
     }
     std::map<Ipv4Address, RoutingTableEntry> allRoutes;
     m_advRoutingTable.GetListOfAllRoutes(allRoutes);
-    if (EnableRouteAggregation && allRoutes.size() > 0)
+    if (EnableRouteAggregation && !allRoutes.empty())
     {
         Simulator::Schedule(m_routeAggregationTime, &RoutingProtocol::SendTriggeredUpdate, this);
     }
@@ -1280,7 +1280,7 @@ RoutingProtocol::MergeTriggerPeriodicUpdates()
         "Merging advertised table changes with main table before sending out periodic update");
     std::map<Ipv4Address, RoutingTableEntry> allRoutes;
     m_advRoutingTable.GetListOfAllRoutes(allRoutes);
-    if (allRoutes.size() > 0)
+    if (!allRoutes.empty())
     {
         for (std::map<Ipv4Address, RoutingTableEntry>::const_iterator i = allRoutes.begin();
              i != allRoutes.end();

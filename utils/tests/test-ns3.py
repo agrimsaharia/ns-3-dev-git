@@ -144,7 +144,8 @@ def get_libraries_list(lib_outdir=usual_lib_outdir):
     @param lib_outdir: path containing libraries
     @return list of built libraries.
     """
-    return glob.glob(lib_outdir + '/*', recursive=True)
+    libraries = glob.glob(lib_outdir + '/*', recursive=True)
+    return list(filter(lambda x: "scratch-nested-subdir-lib" not in x, libraries))
 
 
 def get_headers_list(outdir=usual_outdir):
@@ -969,7 +970,7 @@ class NS3ConfigureTestCase(NS3BaseTestCase):
             self.assertLess(len(get_enabled_modules()), len(self.ns3_modules))
             self.assertIn("ns3-lte", enabled_modules)
             self.assertTrue(get_test_enabled())
-            self.assertGreaterEqual(len(get_programs_list()), len(self.ns3_executables))
+            self.assertLessEqual(len(get_programs_list()), len(self.ns3_executables))
 
             # Replace the ns3rc file with the wifi module, enabling examples and disabling tests
             with open(ns3rc_script, "w") as f:
@@ -1209,7 +1210,8 @@ class NS3ConfigureTestCase(NS3BaseTestCase):
         test_files = ["scratch/main.cc",
                       "scratch/empty.cc",
                       "scratch/subdir1/main.cc",
-                      "scratch/subdir2/main.cc"]
+                      "scratch/subdir2/main.cc",
+                      "scratch/main.test.dots.in.name.cc"]
         backup_files = ["scratch/.main.cc"]  # hidden files should be ignored
 
         # Create test scratch files
@@ -1252,6 +1254,25 @@ class NS3ConfigureTestCase(NS3BaseTestCase):
             else:
                 self.assertEqual(return_code, 1)
 
+        # Now test them in CMake 3.10
+        run_ns3("clean")
+        with DockerContainerManager(self, "ubuntu:18.04") as container:
+            container.execute("apt-get update")
+            container.execute("apt-get install -y python3 cmake g++-8 ninja-build")
+            try:
+                container.execute(
+                    "./ns3 configure --enable-modules=core,network,internet -- -DCMAKE_CXX_COMPILER=/usr/bin/g++-8")
+            except DockerException as e:
+                self.fail()
+            for path in test_files:
+                path = path.replace(".cc", "")
+                try:
+                    container.execute(f"./ns3 run {path}")
+                except DockerException as e:
+                    if "main" in path:
+                        self.fail()
+        run_ns3("clean")
+
         # Delete the test files and reconfigure to clean them up
         for path in test_files + backup_files:
             source_absolute_path = os.path.join(ns3_path, path)
@@ -1266,7 +1287,7 @@ class NS3ConfigureTestCase(NS3BaseTestCase):
                                    )[0]
 
             os.remove(os.path.join(executable_absolute_path, executable_name))
-            if path not in ["scratch/main.cc", "scratch/empty.cc"]:
+            if not os.listdir(os.path.dirname(path)):
                 os.rmdir(os.path.dirname(source_absolute_path))
 
         return_code, stdout, stderr = run_ns3("configure -G \"{generator}\"")
@@ -1838,6 +1859,21 @@ class NS3ConfigureTestCase(NS3BaseTestCase):
             except DockerException as e:
                 self.assertTrue(False, "Precompiled headers should have been enabled")
 
+    def test_24_CheckTestSettings(self):
+        """!
+        Check for regressions in test object build.
+        @return None
+        """
+        return_code, stdout, stderr = run_ns3('configure')
+        self.assertEqual(return_code, 0)
+
+        test_module_cache = os.path.join(ns3_path, "cmake-cache", "src", "test")
+        self.assertFalse(os.path.exists(test_module_cache))
+
+        return_code, stdout, stderr = run_ns3('configure --enable-tests')
+        self.assertEqual(return_code, 0)
+        self.assertTrue(os.path.exists(test_module_cache))
+
 
 class NS3BuildBaseTestCase(NS3BaseTestCase):
     """!
@@ -2319,6 +2355,58 @@ class NS3BuildBaseTestCase(NS3BaseTestCase):
         return_code, stdout, stderr = run_program("test.py", "-p ./examples/wireless/mixed-wired-wireless", python=True)
         self.assertEqual(return_code, 0)
 
+    def test_13_FetchOptionalComponents(self):
+        """!
+        Test if we had regressions with brite, click and openflow modules
+        that depend on homonymous libraries
+        @return None
+        """
+        if shutil.which("git") is None:
+            self.skipTest("Missing git")
+
+        # First enable automatic components fetching
+        return_code, stdout, stderr = run_ns3("configure -- -DNS3_FETCH_OPTIONAL_COMPONENTS=ON")
+        self.assertEqual(return_code, 0)
+
+        # Build the optional components to check if their dependencies were fetched
+        # and there were no build regressions
+        return_code, stdout, stderr = run_ns3("build brite click openflow")
+        self.assertEqual(return_code, 0)
+
+    def test_14_LinkContribModuleToSrcModule(self):
+        """!
+        Test if we can link contrib modules to src modules
+        @return None
+        """
+        if shutil.which("git") is None:
+            self.skipTest("Missing git")
+
+        destination_contrib = os.path.join(ns3_path, "contrib/test-contrib-dependency")
+        destination_src = os.path.join(ns3_path, "src/test-src-dependant-on-contrib")
+        # Remove pre-existing directories
+        if os.path.exists(destination_contrib):
+            shutil.rmtree(destination_contrib)
+        if os.path.exists(destination_src):
+            shutil.rmtree(destination_src)
+
+        # Always use a fresh copy
+        shutil.copytree(os.path.join(ns3_path, "build-support/test-files/test-contrib-dependency"),
+                        destination_contrib)
+        shutil.copytree(os.path.join(ns3_path, "build-support/test-files/test-src-dependant-on-contrib"),
+                        destination_src)
+
+        # Then configure
+        return_code, stdout, stderr = run_ns3("configure --enable-examples")
+        self.assertEqual(return_code, 0)
+
+        # Build the src module that depend on a contrib module
+        return_code, stdout, stderr = run_ns3("run source-example")
+        self.assertEqual(return_code, 0)
+
+        # Remove module copies
+        shutil.rmtree(destination_contrib)
+        shutil.rmtree(destination_src)
+
 
 class NS3ExpectedUseTestCase(NS3BaseTestCase):
     """!
@@ -2519,7 +2607,7 @@ class NS3ExpectedUseTestCase(NS3BaseTestCase):
         doc_folder = os.path.abspath(os.sep.join([".", "doc"]))
 
         # For each sphinx doc target.
-        for target in ["contributing", "manual", "models", "tutorial"]:
+        for target in ["installation", "contributing", "manual", "models", "tutorial"]:
             # First we need to clean old docs, or it will not make any sense.
             doc_build_folder = os.sep.join([doc_folder, target, "build"])
             doc_temp_folder = os.sep.join([doc_folder, target, "source-temp"])
@@ -2770,6 +2858,8 @@ class NS3QualityControlTestCase(unittest.TestCase):
         # Skip this test if requests library is not available
         try:
             import requests
+            import urllib3
+            urllib3.disable_warnings()
         except ImportError:
             requests = None  # noqa
             self.skipTest("Requests library is not available")
@@ -2807,10 +2897,15 @@ class NS3QualityControlTestCase(unittest.TestCase):
                 if "build" in root or "_static" in root or "source-temp" in root or 'html' in root:
                     continue
                 for file in files:
+                    filepath = os.path.join(root, file)
+
+                    # skip everything that isn't a file
+                    if not os.path.isfile(filepath):
+                        continue
+
                     # skip svg files
                     if file.endswith(".svg"):
                         continue
-                    filepath = os.path.join(root, file)
 
                     try:
                         with open(filepath, "r") as f:
@@ -2849,37 +2944,39 @@ class NS3QualityControlTestCase(unittest.TestCase):
                 validate_url(test_url)
             except ValidationError:
                 dead_link_msg = "%s: URL %s, invalid URL" % (test_filepath, test_url)
+            except Exception as e:
+                self.assertEqual(False, True, msg=e.__str__())
 
+            if dead_link_msg is not None:
+                return dead_link_msg
+            tries = 3
             # Check if valid URLs are alive
-            if dead_link_msg is None:
+            while tries > 0:
+                # Not verifying the certificate (verify=False) is potentially dangerous
+                # HEAD checks are not as reliable as GET ones,
+                # in some cases they may return bogus error codes and reasons
                 try:
-                    tries = 3
-                    while tries > 0:
-                        # Not verifying the certificate (verify=False) is potentially dangerous
-                        # HEAD checks are not as reliable as GET ones,
-                        # in some cases they may return bogus error codes and reasons
-                        response = requests.get(test_url, verify=False, headers=headers)
+                    response = requests.get(test_url, verify=False, headers=headers, timeout=50)
 
-                        # In case of success and redirection
-                        if response.status_code in [200, 301]:
+                    # In case of success and redirection
+                    if response.status_code in [200, 301]:
+                        dead_link_msg = None
+                        break
+
+                    # People use the wrong code, but the reason
+                    # can still be correct
+                    if response.status_code in [302, 308, 500, 503]:
+                        if response.reason.lower() in ['found',
+                                                       'moved temporarily',
+                                                       'permanent redirect',
+                                                       'ok',
+                                                       'service temporarily unavailable'
+                                                       ]:
                             dead_link_msg = None
                             break
-
-                        # People use the wrong code, but the reason
-                        # can still be correct
-                        if response.status_code in [302, 308, 500, 503]:
-                            if response.reason.lower() in ['found',
-                                                           'moved temporarily',
-                                                           'permanent redirect',
-                                                           'ok',
-                                                           'service temporarily unavailable'
-                                                           ]:
-                                dead_link_msg = None
-                                break
-                        # In case it didn't pass in any of the previous tests,
-                        # set dead_link_msg with the most recent error and try again
-                        dead_link_msg = "%s: URL %s: returned code %d" % (test_filepath, test_url, response.status_code)
-                        tries -= 1
+                    # In case it didn't pass in any of the previous tests,
+                    # set dead_link_msg with the most recent error and try again
+                    dead_link_msg = "%s: URL %s: returned code %d" % (test_filepath, test_url, response.status_code)
                 except requests.exceptions.InvalidURL:
                     dead_link_msg = "%s: URL %s: invalid URL" % (test_filepath, test_url)
                 except requests.exceptions.SSLError:
@@ -2892,11 +2989,12 @@ class NS3QualityControlTestCase(unittest.TestCase):
                     except AttributeError:
                         error_msg = e.args[0]
                     dead_link_msg = "%s: URL %s: failed with exception: %s" % (test_filepath, test_url, error_msg)
+                tries -= 1
             return dead_link_msg
 
         # Dispatch threads to test multiple URLs concurrently
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        with ThreadPoolExecutor(max_workers=100) as executor:
             dead_links = list(executor.map(test_file_url, list(files_and_urls)))
 
         # Filter out None entries

@@ -134,6 +134,10 @@ Ipv4L3Protocol::GetTypeId()
 Ipv4L3Protocol::Ipv4L3Protocol()
 {
     NS_LOG_FUNCTION(this);
+    m_ucb = MakeCallback(&Ipv4L3Protocol::IpForward, this);
+    m_mcb = MakeCallback(&Ipv4L3Protocol::IpMulticastForward, this);
+    m_lcb = MakeCallback(&Ipv4L3Protocol::LocalDeliver, this);
+    m_ecb = MakeCallback(&Ipv4L3Protocol::RouteInputError, this);
 }
 
 Ipv4L3Protocol::~Ipv4L3Protocol()
@@ -674,13 +678,7 @@ Ipv4L3Protocol::Receive(Ptr<NetDevice> device,
     }
 
     NS_ASSERT_MSG(m_routingProtocol, "Need a routing protocol object to process packets");
-    if (!m_routingProtocol->RouteInput(packet,
-                                       ipHeader,
-                                       device,
-                                       MakeCallback(&Ipv4L3Protocol::IpForward, this),
-                                       MakeCallback(&Ipv4L3Protocol::IpMulticastForward, this),
-                                       MakeCallback(&Ipv4L3Protocol::LocalDeliver, this),
-                                       MakeCallback(&Ipv4L3Protocol::RouteInputError, this)))
+    if (!m_routingProtocol->RouteInput(packet, ipHeader, device, m_ucb, m_mcb, m_lcb, m_ecb))
     {
         NS_LOG_WARN("No route found for forwarding packet.  Drop.");
         m_dropTrace(ipHeader, packet, DROP_NO_ROUTE, this, interface);
@@ -1395,7 +1393,7 @@ Ipv4L3Protocol::SetUp(uint32_t i)
         NS_LOG_LOGIC(
             "Interface "
             << int(i)
-            << " is set to be down for IPv4. Reason: not respecting minimum IPv4 MTU (68 octects)");
+            << " is set to be down for IPv4. Reason: not respecting minimum IPv4 MTU (68 octets)");
     }
 }
 
@@ -1650,7 +1648,7 @@ Ipv4L3Protocol::Fragments::IsEntire() const
 {
     NS_LOG_FUNCTION(this);
 
-    bool ret = !m_moreFragment && m_fragments.size() > 0;
+    bool ret = !m_moreFragment && !m_fragments.empty();
 
     if (ret)
     {
