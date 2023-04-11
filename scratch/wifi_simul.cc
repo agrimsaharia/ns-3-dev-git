@@ -130,15 +130,15 @@ TraceDropRatio()
 //         MakeBoundCallback(&DataRateTrace));
 // }
 
-int64_t lastTime = 0;
+// double lastTime = 0;
+// unsigned long totalMessagesSent = 0;
 
-void
-TraceTx(Ptr<const Packet> packet)
-{
-    int64_t newTime = Simulator::Now().GetNanoSeconds();
-    std::cout << "Sending rate: " << 512*1000000000*1.0/(1024*1024*(newTime-lastTime)) << '\n';
-    lastTime = newTime;
-}
+// static void
+// TraceTx(Ptr<const Packet> packet)
+// {
+//     lastTime = Simulator::Now().GetSeconds();
+//     totalMessagesSent++;
+// }
 
 int
 main(int argc, char* argv[])
@@ -176,7 +176,7 @@ main(int argc, char* argv[])
 
     PointToPointHelper p2pbottleneckhelper;
     p2pbottleneckhelper.SetChannelAttribute("Delay", StringValue("10ms"));
-    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
+    p2pbottleneckhelper.SetDeviceAttribute("DataRate", StringValue("1Mbps"));
 
     NodeContainer leftwifinodes(n_nodes);
     PointToPointDumbbellHelper dumbbellhelper(0,
@@ -275,17 +275,17 @@ main(int argc, char* argv[])
     ApplicationContainer senderApps;
     for (int i = 0; i < n_nodes; i++)
     {
-        OnOffHelper onoffhelper("ns3::TcpSocketFactory",
-                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800)
-                                 );
-        onoffhelper.SetConstantRate(DataRate(100*1024*1024));
-        senderApps.Add(onoffhelper.Install(leftwifinodes.Get(i)));
+        // OnOffHelper onoffhelper("ns3::TcpSocketFactory",
+        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800)
+        //                          );
+        // onoffhelper.SetConstantRate(DataRate(100*1024*1024));
+        // senderApps.Add(onoffhelper.Install(leftwifinodes.Get(i)));
 
-        senderApps.Get(i)->TraceConnectWithoutContext("Tx", MakeCallback(&TraceTx));
+        // senderApps.Get(i)->TraceConnectWithoutContext("Tx", MakeCallback(&TraceTx));
 
-        // BulkSendHelper blksender("ns3::TcpSocketFactory",
-        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        // senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
+        BulkSendHelper blksender("ns3::TcpSocketFactory",
+                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
     }
 
     ApplicationContainer recvApps;
@@ -322,6 +322,8 @@ main(int argc, char* argv[])
     std::cout << "Ratio of dropped packets on AP: " << pktsDropAP * 1.0 / pktsRecvAP
               << '\n';
 
+    // std::cout << "Sending rate: " << 512*totalMessagesSent*1.0/(1024*1024*lastTime) << "Mbps\n";
+    
     for (int i = 0; i < n_nodes; i++)
     {
         std::cout << "Avg. Goodput (Mbps) for flow " + std::to_string(i) + ": "
