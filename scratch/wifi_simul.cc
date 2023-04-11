@@ -130,6 +130,16 @@ TraceDropRatio()
 //         MakeBoundCallback(&DataRateTrace));
 // }
 
+int64_t lastTime = 0;
+
+void
+TraceTx(Ptr<const Packet> packet)
+{
+    int64_t newTime = Simulator::Now().GetNanoSeconds();
+    std::cout << "Sending rate: " << 512*1000000000*1.0/(1024*1024*(newTime-lastTime)) << '\n';
+    lastTime = newTime;
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -265,9 +275,17 @@ main(int argc, char* argv[])
     ApplicationContainer senderApps;
     for (int i = 0; i < n_nodes; i++)
     {
-        BulkSendHelper blksender("ns3::TcpSocketFactory",
-                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
-        senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
+        OnOffHelper onoffhelper("ns3::TcpSocketFactory",
+                                 InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800)
+                                 );
+        onoffhelper.SetConstantRate(DataRate(100*1024*1024));
+        senderApps.Add(onoffhelper.Install(leftwifinodes.Get(i)));
+
+        senderApps.Get(i)->TraceConnectWithoutContext("Tx", MakeCallback(&TraceTx));
+
+        // BulkSendHelper blksender("ns3::TcpSocketFactory",
+        //                          InetSocketAddress(dumbbellhelper.GetRightIpv4Address(i), 800));
+        // senderApps.Add(blksender.Install(leftwifinodes.Get(i)));
     }
 
     ApplicationContainer recvApps;
