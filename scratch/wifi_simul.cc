@@ -142,7 +142,8 @@ TraceDropRatio()
 int
 main(int argc, char* argv[])
 {
-    std::string phyMode("HtMcs7");
+    // std::string phyMode("HtMcs7");
+    std::string phyMode("HeMcs10");
     std::string tcp_mode = "TcpCubic";
     int runtime = 50; // Seconds
     bool enable_log = false;
@@ -178,7 +179,8 @@ main(int argc, char* argv[])
                                               p2pbottleneckhelper);
 
     WifiHelper wifiHelper;
-    wifiHelper.SetStandard(WIFI_STANDARD_80211n);
+    // wifiHelper.SetStandard(WIFI_STANDARD_80211n);
+    wifiHelper.SetStandard(WIFI_STANDARD_80211ax);
 
     /* Set up Legacy Channel */
     YansWifiChannelHelper wifiChannel;
@@ -188,12 +190,14 @@ main(int argc, char* argv[])
     /* Setup Physical Layer */
     YansWifiPhyHelper wifiPhy;
     wifiPhy.SetChannel(wifiChannel.Create());
-    wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
+    // wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
     wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
                                        "DataMode",
                                        StringValue(phyMode),
                                        "ControlMode",
-                                       StringValue("HtMcs0"));
+                                    //    StringValue("HtMcs0")
+                                       StringValue("HeMcs0")
+                                       );
 
     // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
 

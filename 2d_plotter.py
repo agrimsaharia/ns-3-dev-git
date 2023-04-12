@@ -12,6 +12,7 @@ def plot(i):
     print(path)
     file = open(path)
     array = np.loadtxt(file, delimiter=',')
+    # array[array > 1000000] = 50000
     if type == "scatter" or type == "s": plt.scatter(array[:, 0], array[:, 1], label=path)
     elif type == "line" or type == "l" : plt.plot(array[:, 0], array[:, 1], label=path)
 
